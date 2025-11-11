@@ -771,7 +771,7 @@ function setupKeys() {
       if (blendModeULoc) gl.uniform1i(blendModeULoc, blendMode);
     }
 
-  if (e.key === "!") {
+    if (e.key === "!") {
         console.log("Part 5: Creating an autumn forest scene with trees and fallen leaves!");
 
         // Available textures from the course
@@ -781,8 +781,7 @@ function setupKeys() {
 
         console.log("Total triangle sets available: " + numTriangleSets);
 
-        // Create autumn forest: distribute roles across available sets
-        
+        // Create autumn forest scene
         for (var i = 0; i < numTriangleSets; i++) {
             var currSet = inputTriangles[i];
             if (!currSet.material) currSet.material = {};
@@ -793,87 +792,51 @@ function setupKeys() {
             
             var newTexUrl, alphaVal;
             
-            // Distribute roles based on available sets
-            if (i === 0) {
-                // First object - Large tree on left
+            // Assign roles - prioritize getting visible elements first
+            if (i % 3 === 0) {
+                // Trees - make them large and prominent
                 newTexUrl = treeTexture;
                 currSet.material.diffuse = [0.4, 0.5, 0.25];
                 currSet.material.specular = [0.3, 0.4, 0.2];
                 currSet.material.ambient = [0.3, 0.4, 0.2];
                 currSet.material.n = 20;
                 alphaVal = 0.9;
-                vec3.set(currSet.translation, -0.35, 0.0, -0.2);
+                
+                // Position trees left and right, spread across scene
+                var treeIndex = Math.floor(i / 3);
+                var xPos = (treeIndex % 2 === 0) ? -0.3 : 0.3;
+                var zPos = -0.1 - (treeIndex * 0.05);
+                vec3.set(currSet.translation, xPos, 0.1, zPos);
                 transparentMask[i] = true;
                 
-            } else if (i === 1) {
-                // Second object - Large tree on right
-                newTexUrl = treeTexture;
-                currSet.material.diffuse = [0.45, 0.55, 0.3];
-                currSet.material.specular = [0.3, 0.4, 0.2];
-                currSet.material.ambient = [0.3, 0.4, 0.2];
-                currSet.material.n = 20;
-                alphaVal = 0.85;
-                vec3.set(currSet.translation, 0.3, 0.0, -0.15);
-                transparentMask[i] = true;
-                
-            } else if (i === 2) {
-                // Third object - Leaves bottom left
+            } else if (i % 3 === 1) {
+                // Leaves on ground - autumn colors
                 newTexUrl = leafTexture;
-                currSet.material.diffuse = [0.9, 0.5, 0.15];
+                currSet.material.diffuse = [0.9, 0.5 + (i * 0.05) % 0.2, 0.15];
                 currSet.material.specular = [0.4, 0.3, 0.1];
                 currSet.material.ambient = [0.5, 0.35, 0.15];
                 currSet.material.n = 25;
                 alphaVal = 0.85;
-                vec3.set(currSet.translation, -0.25, -0.35, -0.05);
+                
+                // Spread leaves across bottom of scene
+                var leafIndex = Math.floor(i / 3);
+                var xPos = -0.3 + (leafIndex * 0.3);
+                vec3.set(currSet.translation, xPos, -0.2, 0.05);
                 transparentMask[i] = true;
                 
-            } else if (i === 3) {
-                // Fourth object - Leaves bottom center
-                newTexUrl = leafTexture;
-                currSet.material.diffuse = [0.95, 0.6, 0.2];
-                currSet.material.specular = [0.4, 0.3, 0.1];
-                currSet.material.ambient = [0.5, 0.4, 0.2];
-                currSet.material.n = 25;
-                alphaVal = 0.8;
-                vec3.set(currSet.translation, 0.0, -0.4, 0.0);
-                transparentMask[i] = true;
-                
-            } else if (i === 4) {
-                // Fifth object - Leaves bottom right
+            } else {
+                // Ground/rock base - more leaves in different positions
                 newTexUrl = leafTexture;
                 currSet.material.diffuse = [0.85, 0.45, 0.1];
                 currSet.material.specular = [0.4, 0.3, 0.1];
                 currSet.material.ambient = [0.5, 0.3, 0.1];
                 currSet.material.n = 25;
-                alphaVal = 0.75;
-                vec3.set(currSet.translation, 0.25, -0.38, -0.03);
-                transparentMask[i] = true;
+                alphaVal = 0.8;
                 
-            } else {
-                // Remaining objects - alternate between trees and leaves
-                if (i % 2 === 0) {
-                    // More trees scattered
-                    newTexUrl = treeTexture;
-                    currSet.material.diffuse = [0.4 + (i*0.05)%0.2, 0.5, 0.25];
-                    currSet.material.specular = [0.3, 0.4, 0.2];
-                    currSet.material.ambient = [0.3, 0.4, 0.2];
-                    currSet.material.n = 20;
-                    alphaVal = 0.7 + (i % 3) * 0.1;
-                    var xOffset = ((i % 4) - 2) * 0.15;
-                    vec3.set(currSet.translation, xOffset, -0.1, -0.1 - (i % 3) * 0.05);
-                    transparentMask[i] = true;
-                } else {
-                    // More leaves
-                    newTexUrl = leafTexture;
-                    currSet.material.diffuse = [0.85 + (i*0.03)%0.15, 0.5 - (i*0.05)%0.2, 0.15];
-                    currSet.material.specular = [0.4, 0.3, 0.1];
-                    currSet.material.ambient = [0.5, 0.35, 0.15];
-                    currSet.material.n = 25;
-                    alphaVal = 0.7 + (i % 4) * 0.05;
-                    var xOffset2 = ((i % 5) - 2.5) * 0.12;
-                    vec3.set(currSet.translation, xOffset2, -0.35 - (i % 3) * 0.05, 0.05);
-                    transparentMask[i] = true;
-                }
+                var leafIndex2 = Math.floor(i / 3);
+                var xPos = -0.15 + (leafIndex2 * 0.25);
+                vec3.set(currSet.translation, xPos, -0.25, 0.08);
+                transparentMask[i] = true;
             }
             
             currSet.material.alpha = alphaVal;
