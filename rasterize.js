@@ -773,7 +773,9 @@ function setupKeys() {
 
     if (e.key === "!") {
         console.log("Part 5: Creating an autumn forest scene with additional geometry!");
+        console.log("Original triangle sets: " + numTriangleSets);
 
+        // Helper to create a quad triangle set
         function createQuadTriangleSet(width, height, centerX, centerY, centerZ) {
             var halfW = width / 2;
             var halfH = height / 2;
@@ -781,7 +783,7 @@ function setupKeys() {
             return {
                 material: {},
                 center: vec3.fromValues(centerX, centerY, centerZ),
-                on: true,  // make sure all new objects are active
+                on: false,
                 translation: vec3.fromValues(0, 0, 0),
                 xAxis: vec3.fromValues(1, 0, 0),
                 yAxis: vec3.fromValues(0, 1, 0),
@@ -814,7 +816,7 @@ function setupKeys() {
             };
         }
 
-        // Define new triangle sets (trees, leaves, rock)
+        // Create new triangle sets for autumn leaves and ground
         var newSets = [
             createQuadTriangleSet(0.3, 0.4, -0.15, -0.35, 0.0),  // Left leaves
             createQuadTriangleSet(0.3, 0.4, 0.15, -0.35, 0.02),  // Right leaves
@@ -825,15 +827,19 @@ function setupKeys() {
 
         var originalNumSets = numTriangleSets;
 
-        // Add new sets to global arrays
-        newSets.forEach((newSet, idx) => {
-            var setIdx = originalNumSets + idx;
+        // Add new sets to global arrays and create buffers
+        for (var n = 0; n < newSets.length; n++) {
+            var newSet = newSets[n];
+            var setIdx = originalNumSets + n;
 
-            // Flatten vertices/normals/uvs for WebGL
-            newSet.vertices.forEach(v => newSet.glVertices.push(...v));
-            newSet.normals.forEach(n => newSet.glNormals.push(...n));
-            newSet.uvs.forEach(uv => newSet.glUVs.push(...uv));
-            newSet.triangles.forEach(t => newSet.glTriangles.push(...t));
+            for (var v = 0; v < newSet.vertices.length; v++) {
+                newSet.glVertices.push(newSet.vertices[v][0], newSet.vertices[v][1], newSet.vertices[v][2]);
+                newSet.glNormals.push(newSet.normals[v][0], newSet.normals[v][1], newSet.normals[v][2]);
+                newSet.glUVs.push(newSet.uvs[v][0], newSet.uvs[v][1]);
+            }
+            for (var t = 0; t < newSet.triangles.length; t++) {
+                newSet.glTriangles.push(newSet.triangles[t][0], newSet.triangles[t][1], newSet.triangles[t][2]);
+            }
 
             inputTriangles.push(newSet);
 
@@ -857,44 +863,74 @@ function setupKeys() {
             transparentMask[setIdx] = true;
             textureURLs[setIdx] = null;
             textureObjects[setIdx] = null;
-        });
+        }
 
         numTriangleSets = inputTriangles.length;
         window.numTriangleSets = numTriangleSets;
-        console.log("Total triangle sets now: " + numTriangleSets);
+        console.log("New total triangle sets: " + numTriangleSets);
 
-        // Define textures
+        // Textures for trees, leaves, and rocks
         var treeTexture = "https://ncsucgclass.github.io/prog4/tree.png";
         var leafTexture = "https://ncsucgclass.github.io/prog4/leaf.small.png";
         var rockTexture = "https://ncsucgclass.github.io/prog4/rocktile.jpg";
 
-        // Apply materials and textures to all sets
+        // Configure materials and textures for all sets
         for (var i = 0; i < numTriangleSets; i++) {
             var currSet = inputTriangles[i];
             if (!currSet.material) currSet.material = {};
-
             currSet.xAxis = vec3.fromValues(1, 0, 0);
             currSet.yAxis = vec3.fromValues(0, 1, 0);
 
-            // Assign textures and materials
-            if (i <= 2) {
-                // Original trees and central leaves
-                var textures = [treeTexture, treeTexture, leafTexture];
-                var alphas = [0.95, 0.9, 0.85];
-                currSet.material.alpha = alphas[i];
-                loadTextureForSet(i, textures[i]);
-                textureURLs[i] = textures[i];
-            } else {
-                // Newly added leaves and rock
-                var newTex = (i === numTriangleSets - 1) ? rockTexture : leafTexture;
-                currSet.material.alpha = (i === numTriangleSets - 1) ? 1.0 : 0.8;
-                loadTextureForSet(i, newTex);
-                textureURLs[i] = newTex;
+            var newTexUrl, alphaVal;
+
+            // Original objects
+            if (i === 0) {
+                newTexUrl = treeTexture; alphaVal = 0.95;
+                currSet.material.diffuse = [0.5, 0.6, 0.3];
+                currSet.material.specular = [0.3, 0.4, 0.2];
+                currSet.material.ambient = [0.4, 0.5, 0.3];
+                currSet.material.n = 25;
+                vec3.set(currSet.translation, -0.3, 0.05, -0.1);
+            } else if (i === 1) {
+                newTexUrl = treeTexture; alphaVal = 0.9;
+                currSet.material.diffuse = [0.45, 0.55, 0.28];
+                currSet.material.specular = [0.3, 0.4, 0.2];
+                currSet.material.ambient = [0.4, 0.5, 0.3];
+                currSet.material.n = 25;
+                vec3.set(currSet.translation, 0.3, 0.0, -0.08);
+            } else if (i === 2) {
+                newTexUrl = leafTexture; alphaVal = 0.85;
+                currSet.material.diffuse = [0.9, 0.55, 0.2];
+                currSet.material.specular = [0.5, 0.4, 0.2];
+                currSet.material.ambient = [0.6, 0.4, 0.25];
+                currSet.material.n = 30;
+                vec3.set(currSet.translation, 0.0, -0.25, 0.0);
+            } else if (i >= 3 && i <= 6) {
+                // Additional leaves
+                newTexUrl = leafTexture;
+                alphaVal = [0.8, 0.82, 0.78, 0.76][i-3];
+                currSet.material.diffuse = [[0.95,0.6,0.25],[0.85,0.5,0.15],[0.92,0.58,0.22],[0.88,0.52,0.18]][i-3];
+                currSet.material.specular = [0.5, 0.4, 0.2];
+                currSet.material.ambient = [[0.6,0.45,0.3],[0.55,0.35,0.2],[0.58,0.4,0.25],[0.56,0.38,0.22]][i-3];
+                currSet.material.n = [28,28,26,26][i-3];
+            } else if (i === 7) {
+                newTexUrl = rockTexture; alphaVal = 1.0;
+                currSet.material.diffuse = [0.5, 0.4, 0.3];
+                currSet.material.specular = [0.2, 0.2, 0.2];
+                currSet.material.ambient = [0.4, 0.35, 0.3];
+                currSet.material.n = 20;
+                transparentMask[i] = false;
             }
 
-            transparentMask[i] = true;
-            currSet.on = true;
+            currSet.material.alpha = alphaVal;
+            loadTextureForSet(i, newTexUrl);
+            textureURLs[i] = newTexUrl;
         }
+
+        // Draw all triangle sets
+        var allSetIndices = [];
+        for (var i = 0; i < numTriangleSets; i++) allSetIndices.push(i);
+        drawSets(allSetIndices, pvMatrix);
 
         // Warm autumn lighting
         lightAmbient = vec3.fromValues(0.6, 0.5, 0.4);
@@ -902,7 +938,8 @@ function setupKeys() {
         lightSpecular = vec3.fromValues(1.3, 1.1, 0.8);
 
         console.log("Autumn forest scene created: 2 trees + " + (numTriangleSets - 2) + " leaf/ground objects!");
-    }
+}
+
 
     
   });
