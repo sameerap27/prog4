@@ -873,6 +873,9 @@ function setupKeys() {
         
         numTriangleSets = inputTriangles.length;
         console.log("New total triangle sets: " + numTriangleSets);
+        
+        // Force update the global variable
+        window.numTriangleSets = numTriangleSets;
 
         // Now configure all triangle sets (original + new)
         var treeTexture = "https://ncsucgclass.github.io/prog4/tree.png";
