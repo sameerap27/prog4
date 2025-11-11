@@ -416,214 +416,208 @@ function loadTextureForSet(setIndex, url) {
     img.src = url;
 }
 
-/// setup the webGL shaders
 function setupShaders() {
-    
-    // define vertex shader in essl using es6 template strings
+
+    // Vertex Shader
     var vShaderCode = `
-        attribute vec3 aVertexPosition; // vertex position
-        attribute vec3 aVertexNormal; // vertex normal
+        attribute vec3 aVertexPosition;
+        attribute vec3 aVertexNormal;
+        attribute vec2 aVertexUV; // texture coordinates
         
-        uniform mat4 umMatrix; // the model matrix
-        uniform mat4 upvmMatrix; // the project view model matrix
+        uniform mat4 umMatrix;
+        uniform mat4 upvmMatrix;
         
-        varying vec3 vWorldPos; // interpolated world position of vertex
-        varying vec3 vVertexNormal; // interpolated normal for frag shader
+        varying vec3 vWorldPos;
+        varying vec3 vVertexNormal;
+        varying vec2 vUV; // pass UV to fragment shader
 
         void main(void) {
-            
-            // vertex position
-            vec4 vWorldPos4 = umMatrix * vec4(aVertexPosition, 1.0);
-            vWorldPos = vec3(vWorldPos4.x,vWorldPos4.y,vWorldPos4.z);
+            vec4 worldPos4 = umMatrix * vec4(aVertexPosition, 1.0);
+            vWorldPos = vec3(worldPos4);
             gl_Position = upvmMatrix * vec4(aVertexPosition, 1.0);
 
-            // vertex normal (assume no non-uniform scale)
-            vec4 vWorldNormal4 = umMatrix * vec4(aVertexNormal, 0.0);
-            vVertexNormal = normalize(vec3(vWorldNormal4.x,vWorldNormal4.y,vWorldNormal4.z)); 
+            vec4 worldNormal4 = umMatrix * vec4(aVertexNormal, 0.0);
+            vVertexNormal = normalize(vec3(worldNormal4));
+            vUV = aVertexUV; // pass UV
         }
     `;
-    
-    // define fragment shader in essl using es6 template strings
+
+    // Fragment Shader
     var fShaderCode = `
-        precision mediump float; // set float to medium precision
+        precision mediump float;
 
-        // eye location
-        uniform vec3 uEyePosition; // the eye's position in world
-        
-        // light properties
-        uniform vec3 uLightAmbient; // the light's ambient color
-        uniform vec3 uLightDiffuse; // the light's diffuse color
-        uniform vec3 uLightSpecular; // the light's specular color
-        uniform vec3 uLightPosition; // the light's position
-        
-        // material properties
-        uniform vec3 uAmbient; // the ambient reflectivity
-        uniform vec3 uDiffuse; // the diffuse reflectivity
-        uniform vec3 uSpecular; // the specular reflectivity
-        uniform float uShininess; // the specular exponent
+        uniform vec3 uEyePosition;
+        uniform vec3 uLightAmbient;
+        uniform vec3 uLightDiffuse;
+        uniform vec3 uLightSpecular;
+        uniform vec3 uLightPosition;
 
-        // PART 5: alpha support
+        uniform vec3 uAmbient;
+        uniform vec3 uDiffuse;
+        uniform vec3 uSpecular;
+        uniform float uShininess;
+
+        uniform sampler2D uTexture; // texture sampler
         uniform float uAlpha; // transparency
-        
-        // geometry properties
-        varying vec3 vWorldPos; // world xyz of fragment
-        varying vec3 vVertexNormal; // normal of fragment
-            
+        uniform int uBlendMode; // 0 = replace, 1 = modulate
+
+        varying vec3 vWorldPos;
+        varying vec3 vVertexNormal;
+        varying vec2 vUV;
+
         void main(void) {
-        
-            // ambient term
-            vec3 ambient = uAmbient * uLightAmbient; 
-            
-            // diffuse term
-            vec3 normal = normalize(vVertexNormal); 
+            // basic Phong lighting
+            vec3 ambient = uAmbient * uLightAmbient;
+
+            vec3 normal = normalize(vVertexNormal);
             vec3 light = normalize(uLightPosition - vWorldPos);
-            float lambert = max(0.0,dot(normal,light));
-            vec3 diffuse = uDiffuse * uLightDiffuse * lambert; // diffuse term
-            
-            // specular term
+            float lambert = max(0.0, dot(normal, light));
+            vec3 diffuse = uDiffuse * uLightDiffuse * lambert;
+
             vec3 eye = normalize(uEyePosition - vWorldPos);
             vec3 halfVec = normalize(light + eye);
-            float highlight = pow(max(0.0,dot(normal,halfVec)), uShininess);
-            vec3 specular = uSpecular * uLightSpecular * highlight; // specular term
-            
-            // combine to output color
-            vec3 colorOut = ambient + diffuse + specular;
-            
-            // PART 5: include alpha
-            gl_FragColor = vec4(colorOut, uAlpha);
+            float highlight = pow(max(0.0, dot(normal, halfVec)), uShininess);
+            vec3 specular = uSpecular * uLightSpecular * highlight;
+
+            vec3 litColor = ambient + diffuse + specular;
+
+            // sample texture
+            vec4 texColor = texture2D(uTexture, vUV);
+
+            // blending modes
+            vec3 finalColor;
+            if (uBlendMode == 0) {
+                finalColor = texColor.rgb; // replace
+            } else {
+                finalColor = texColor.rgb * litColor; // modulate
+            }
+
+            gl_FragColor = vec4(finalColor, uAlpha * texColor.a);
         }
     `;
-    
-    try {
-        var fShader = gl.createShader(gl.FRAGMENT_SHADER); 
-        gl.shaderSource(fShader,fShaderCode); 
-        gl.compileShader(fShader); 
 
-        var vShader = gl.createShader(gl.VERTEX_SHADER); 
-        gl.shaderSource(vShader,vShaderCode); 
-        gl.compileShader(vShader); 
-            
+    try {
+        var fShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fShader, fShaderCode);
+        gl.compileShader(fShader);
+
+        var vShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vShader, vShaderCode);
+        gl.compileShader(vShader);
+
         if (!gl.getShaderParameter(fShader, gl.COMPILE_STATUS)) {
-            throw "error during fragment shader compile: " + gl.getShaderInfoLog(fShader);  
-            gl.deleteShader(fShader);
+            throw "Fragment shader compile error: " + gl.getShaderInfoLog(fShader);
         } else if (!gl.getShaderParameter(vShader, gl.COMPILE_STATUS)) {
-            throw "error during vertex shader compile: " + gl.getShaderInfoLog(vShader);  
-            gl.deleteShader(vShader);
-        } else { 
-            var shaderProgram = gl.createProgram(); 
-            gl.attachShader(shaderProgram, fShader); 
-            gl.attachShader(shaderProgram, vShader); 
-            gl.linkProgram(shaderProgram); 
+            throw "Vertex shader compile error: " + gl.getShaderInfoLog(vShader);
+        } else {
+            var shaderProgram = gl.createProgram();
+            gl.attachShader(shaderProgram, fShader);
+            gl.attachShader(shaderProgram, vShader);
+            gl.linkProgram(shaderProgram);
 
             if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-                throw "error during shader program linking: " + gl.getProgramInfoLog(shaderProgram);
-            } else { 
-                gl.useProgram(shaderProgram); 
-                
-                // locate and enable vertex attributes
-                vPosAttribLoc = gl.getAttribLocation(shaderProgram, "aVertexPosition"); 
-                gl.enableVertexAttribArray(vPosAttribLoc); 
-                vNormAttribLoc = gl.getAttribLocation(shaderProgram, "aVertexNormal"); 
-                gl.enableVertexAttribArray(vNormAttribLoc); 
-                
-                // locate vertex uniforms
-                mMatrixULoc = gl.getUniformLocation(shaderProgram, "umMatrix"); 
-                pvmMatrixULoc = gl.getUniformLocation(shaderProgram, "upvmMatrix"); 
-                
-                // locate fragment uniforms
-                var eyePositionULoc = gl.getUniformLocation(shaderProgram, "uEyePosition"); 
-                var lightAmbientULoc = gl.getUniformLocation(shaderProgram, "uLightAmbient"); 
-                var lightDiffuseULoc = gl.getUniformLocation(shaderProgram, "uLightDiffuse"); 
-                var lightSpecularULoc = gl.getUniformLocation(shaderProgram, "uLightSpecular"); 
-                var lightPositionULoc = gl.getUniformLocation(shaderProgram, "uLightPosition"); 
-                ambientULoc = gl.getUniformLocation(shaderProgram, "uAmbient"); 
-                diffuseULoc = gl.getUniformLocation(shaderProgram, "uDiffuse"); 
-                specularULoc = gl.getUniformLocation(shaderProgram, "uSpecular"); 
-                shininessULoc = gl.getUniformLocation(shaderProgram, "uShininess"); 
-                
-                // PART 5: alpha uniform
+                throw "Shader program link error: " + gl.getProgramInfoLog(shaderProgram);
+            } else {
+                gl.useProgram(shaderProgram);
+
+                vPosAttribLoc = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+                gl.enableVertexAttribArray(vPosAttribLoc);
+                vNormAttribLoc = gl.getAttribLocation(shaderProgram, "aVertexNormal");
+                gl.enableVertexAttribArray(vNormAttribLoc);
+                vUVAttribLoc = gl.getAttribLocation(shaderProgram, "aVertexUV");
+                gl.enableVertexAttribArray(vUVAttribLoc);
+
+                mMatrixULoc = gl.getUniformLocation(shaderProgram, "umMatrix");
+                pvmMatrixULoc = gl.getUniformLocation(shaderProgram, "upvmMatrix");
+
+                ambientULoc = gl.getUniformLocation(shaderProgram, "uAmbient");
+                diffuseULoc = gl.getUniformLocation(shaderProgram, "uDiffuse");
+                specularULoc = gl.getUniformLocation(shaderProgram, "uSpecular");
+                shininessULoc = gl.getUniformLocation(shaderProgram, "uShininess");
+
+                eyePositionULoc = gl.getUniformLocation(shaderProgram, "uEyePosition");
+                lightAmbientULoc = gl.getUniformLocation(shaderProgram, "uLightAmbient");
+                lightDiffuseULoc = gl.getUniformLocation(shaderProgram, "uLightDiffuse");
+                lightSpecularULoc = gl.getUniformLocation(shaderProgram, "uLightSpecular");
+                lightPositionULoc = gl.getUniformLocation(shaderProgram, "uLightPosition");
+
+                textureULoc = gl.getUniformLocation(shaderProgram, "uTexture");
                 alphaULoc = gl.getUniformLocation(shaderProgram, "uAlpha");
+                blendModeULoc = gl.getUniformLocation(shaderProgram, "uBlendMode");
 
-                // pass global constants into fragment uniforms
-                gl.uniform3fv(eyePositionULoc, Eye); 
-                gl.uniform3fv(lightAmbientULoc, lightAmbient); 
-                gl.uniform3fv(lightDiffuseULoc, lightDiffuse); 
-                gl.uniform3fv(lightSpecularULoc, lightSpecular); 
-                gl.uniform3fv(lightPositionULoc, lightPosition); 
-            } 
-        } 
-    } catch(e) {
+                gl.uniform3fv(eyePositionULoc, Eye);
+                gl.uniform3fv(lightAmbientULoc, lightAmbient);
+                gl.uniform3fv(lightDiffuseULoc, lightDiffuse);
+                gl.uniform3fv(lightSpecularULoc, lightSpecular);
+                gl.uniform3fv(lightPositionULoc, lightPosition);
+            }
+        }
+    } catch (e) {
         console.log(e);
-    } 
-} 
+    }
+}
 
-
-// render the loaded model
 function renderModels() {
-    
+
     function makeModelTransform(currModel) {
         var zAxis = vec3.create(), sumRotation = mat4.create(), temp = mat4.create(), negCtr = vec3.create();
 
-        mat4.fromTranslation(mMatrix, vec3.negate(negCtr, currModel.center)); 
-        
+        mat4.fromTranslation(mMatrix, vec3.negate(negCtr, currModel.center));
         if (currModel.on)
-            mat4.multiply(mMatrix, mat4.fromScaling(temp, vec3.fromValues(1.2, 1.2, 1.2)), mMatrix); 
-        
-        vec3.normalize(zAxis, vec3.cross(zAxis, currModel.xAxis, currModel.yAxis)); 
+            mat4.multiply(mMatrix, mat4.fromScaling(temp, vec3.fromValues(1.2, 1.2, 1.2)), mMatrix);
+
+        vec3.normalize(zAxis, vec3.cross(zAxis, currModel.xAxis, currModel.yAxis));
         mat4.set(sumRotation,
             currModel.xAxis[0], currModel.yAxis[0], zAxis[0], 0,
             currModel.xAxis[1], currModel.yAxis[1], zAxis[1], 0,
             currModel.xAxis[2], currModel.yAxis[2], zAxis[2], 0,
             0, 0,  0, 1);
-        mat4.multiply(mMatrix, sumRotation, mMatrix); 
-        
-        mat4.multiply(mMatrix, mat4.fromTranslation(temp, currModel.center), mMatrix); 
-        
-        mat4.multiply(mMatrix, mat4.fromTranslation(temp, currModel.translation), mMatrix); 
-    } 
+        mat4.multiply(mMatrix, sumRotation, mMatrix);
 
-    var pMatrix = mat4.create(); 
-    var vMatrix = mat4.create(); 
-    var mMatrix = mat4.create(); 
-    var pvMatrix = mat4.create(); 
-    var pvmMatrix = mat4.create(); 
-    
-    window.requestAnimationFrame(renderModels); 
-    
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); 
-    
-    mat4.perspective(pMatrix, 0.5*Math.PI, 1, 0.1, 10); 
-    mat4.lookAt(vMatrix, Eye, Center, Up); 
-    mat4.multiply(pvMatrix, pMatrix, vMatrix); 
+        mat4.multiply(mMatrix, mat4.fromTranslation(temp, currModel.center), mMatrix);
+        mat4.multiply(mMatrix, mat4.fromTranslation(temp, currModel.translation), mMatrix);
+    }
 
-    var currSet; 
+    var pMatrix = mat4.create();
+    var vMatrix = mat4.create();
+    var mMatrix = mat4.create();
+    var pvMatrix = mat4.create();
+    var pvmMatrix = mat4.create();
+
+    window.requestAnimationFrame(renderModels);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    mat4.perspective(pMatrix, 0.5*Math.PI, 1, 0.1, 10);
+    mat4.lookAt(vMatrix, Eye, Center, Up);
+    mat4.multiply(pvMatrix, pMatrix, vMatrix);
+
     for (var whichTriSet = 0; whichTriSet < numTriangleSets; whichTriSet++) {
-        currSet = inputTriangles[whichTriSet];
-        
+        let currSet = inputTriangles[whichTriSet];
         makeModelTransform(currSet);
-        mat4.multiply(pvmMatrix, pvMatrix, mMatrix); 
-        gl.uniformMatrix4fv(mMatrixULoc, false, mMatrix); 
-        gl.uniformMatrix4fv(pvmMatrixULoc, false, pvmMatrix); 
-        
-        // reflectivity
-        gl.uniform3fv(ambientULoc, currSet.material.ambient); 
-        gl.uniform3fv(diffuseULoc, currSet.material.diffuse); 
-        gl.uniform3fv(specularULoc, currSet.material.specular); 
-        gl.uniform1f(shininessULoc, currSet.material.n); 
-        
-        // PART 5: alpha
+        mat4.multiply(pvmMatrix, pvMatrix, mMatrix);
+
+        gl.uniformMatrix4fv(mMatrixULoc, false, mMatrix);
+        gl.uniformMatrix4fv(pvmMatrixULoc, false, pvmMatrix);
+
+        gl.uniform3fv(ambientULoc, currSet.material.ambient);
+        gl.uniform3fv(diffuseULoc, currSet.material.diffuse);
+        gl.uniform3fv(specularULoc, currSet.material.specular);
+        gl.uniform1f(shininessULoc, currSet.material.n);
+
         gl.uniform1f(alphaULoc, currSet.alpha !== undefined ? currSet.alpha : 1.0);
-        
-        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffers[whichTriSet]); 
-        gl.vertexAttribPointer(vPosAttribLoc, 3, gl.FLOAT, false, 0, 0); 
-        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffers[whichTriSet]); 
-        gl.vertexAttribPointer(vNormAttribLoc, 3, gl.FLOAT, false, 0, 0); 
+        gl.uniform1i(blendModeULoc, blendMode || 0);
 
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, triangleBuffers[whichTriSet]); 
-        gl.drawElements(gl.TRIANGLES, 3 * triSetSizes[whichTriSet], gl.UNSIGNED_SHORT, 0); 
-    } 
-} 
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffers[whichTriSet]);
+        gl.vertexAttribPointer(vPosAttribLoc, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffers[whichTriSet]);
+        gl.vertexAttribPointer(vNormAttribLoc, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffers[whichTriSet]);
+        gl.vertexAttribPointer(vUVAttribLoc, 2, gl.FLOAT, false, 0, 0);
 
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, triangleBuffers[whichTriSet]);
+        gl.drawElements(gl.TRIANGLES, 3 * triSetSizes[whichTriSet], gl.UNSIGNED_SHORT, 0);
+    }
+}
 
 // helper: draw array of triangle set indices using current shader and state
 function drawSets(setIndexArray, pvMatrix) {
