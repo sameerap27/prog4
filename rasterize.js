@@ -773,87 +773,108 @@ function setupKeys() {
     }
 
     if (e.key === "!") {
+        console.log("Part 5: making scene interesting with creative texture remapping and transparency!");
 
-        // Create a cyberpunk/neon aesthetic with animated properties
+        // Available textures from the course
+        var availableTextures = [
+            "https://ncsucgclass.github.io/prog4/abe.png",
+            "https://ncsucgclass.github.io/prog4/billie.jpg",
+            "https://ncsucgclass.github.io/prog4/earth.png",
+            "https://ncsucgclass.github.io/prog4/glass.gif",
+            "https://ncsucgclass.github.io/prog4/leaf.small.png",
+            "https://ncsucgclass.github.io/prog4/retro.jpg",
+            "https://ncsucgclass.github.io/prog4/rocktile.jpg",
+            "https://ncsucgclass.github.io/prog4/stars.jpg",
+            "https://ncsucgclass.github.io/prog4/tree.png"
+        ];
+
+        // Apply creative textures and transformations to each set
         for (var i = 0; i < numTriangleSets; i++) {
             var currSet = inputTriangles[i];
 
             if (!currSet.material) currSet.material = {};
             
-            // Assign vibrant neon color palettes to different objects
-            var colorScheme = i % 5;
-            switch(colorScheme) {
-                case 0: // Electric Blue
-                    currSet.material.ambient = [0.1, 0.1, 0.3];
-                    currSet.material.diffuse = [0.2, 0.4, 1.0];
-                    currSet.material.specular = [0.8, 0.9, 1.0];
-                    currSet.material.n = 50;
-                    break;
-                case 1: // Hot Pink/Magenta
-                    currSet.material.ambient = [0.3, 0.05, 0.2];
-                    currSet.material.diffuse = [1.0, 0.1, 0.8];
-                    currSet.material.specular = [1.0, 0.6, 1.0];
-                    currSet.material.n = 60;
-                    break;
-                case 2: // Acid Green
-                    currSet.material.ambient = [0.1, 0.3, 0.1];
-                    currSet.material.diffuse = [0.3, 1.0, 0.3];
-                    currSet.material.specular = [0.7, 1.0, 0.7];
-                    currSet.material.n = 40;
-                    break;
-                case 3: // Orange/Yellow
-                    currSet.material.ambient = [0.3, 0.2, 0.05];
-                    currSet.material.diffuse = [1.0, 0.7, 0.1];
-                    currSet.material.specular = [1.0, 0.9, 0.5];
-                    currSet.material.n = 45;
-                    break;
-                case 4: // Purple/Violet
-                    currSet.material.ambient = [0.2, 0.05, 0.3];
-                    currSet.material.diffuse = [0.7, 0.2, 1.0];
-                    currSet.material.specular = [0.9, 0.7, 1.0];
-                    currSet.material.n = 55;
-                    break;
+            // Assign textures in an interesting pattern - mix faces with nature and space
+            var texIndex = i % availableTextures.length;
+            var newTexUrl = availableTextures[texIndex];
+            
+            // Reload texture for this set
+            loadTextureForSet(i, newTexUrl);
+            textureURLs[i] = newTexUrl;
+            
+            // Create complementary color themes based on texture type
+            if (newTexUrl.includes('earth') || newTexUrl.includes('stars')) {
+                // Space theme - cool colors with high specular
+                currSet.material.diffuse = [0.3, 0.4, 0.8];
+                currSet.material.specular = [1.0, 1.0, 1.0];
+                currSet.material.n = 80;
+                currSet.material.alpha = 0.7 + Math.random() * 0.3;
+            } else if (newTexUrl.includes('leaf') || newTexUrl.includes('tree')) {
+                // Nature theme - greens with medium transparency
+                currSet.material.diffuse = [0.4, 0.8, 0.5];
+                currSet.material.specular = [0.6, 0.9, 0.6];
+                currSet.material.n = 40;
+                currSet.material.alpha = 0.5 + Math.random() * 0.4;
+                transparentMask[i] = true;
+            } else if (newTexUrl.includes('glass')) {
+                // Glass theme - very transparent with high specular
+                currSet.material.diffuse = [0.8, 0.9, 1.0];
+                currSet.material.specular = [1.0, 1.0, 1.0];
+                currSet.material.n = 100;
+                currSet.material.alpha = 0.2 + Math.random() * 0.3;
+                transparentMask[i] = true;
+            } else if (newTexUrl.includes('rock') || newTexUrl.includes('retro')) {
+                // Textured solids - earthy colors
+                currSet.material.diffuse = [0.7, 0.6, 0.5];
+                currSet.material.specular = [0.4, 0.4, 0.4];
+                currSet.material.n = 30;
+                currSet.material.alpha = 0.8 + Math.random() * 0.2;
+            } else {
+                // Face textures (abe, billie) - vibrant with varied transparency
+                currSet.material.diffuse = [0.9, 0.8, 0.7];
+                currSet.material.specular = [0.8, 0.7, 0.6];
+                currSet.material.n = 50;
+                currSet.material.alpha = 0.6 + Math.random() * 0.4;
+                transparentMask[i] = true;
             }
 
-            // Apply dramatic rotations for a chaotic, energetic feel
+            // Enhanced ambient for glow effect
+            currSet.material.ambient = [
+                currSet.material.diffuse[0] * 0.5,
+                currSet.material.diffuse[1] * 0.5,
+                currSet.material.diffuse[2] * 0.5
+            ];
+
+            // Create spiral vortex pattern with rotations
+            var spiralAngle = (i / numTriangleSets) * Math.PI * 6;
+            var spiralRadius = 0.3 * (i / numTriangleSets);
             var axis = vec3.fromValues(
-                Math.sin(i * 0.7) * 0.5 + 0.5,
-                Math.cos(i * 1.3) * 0.5 + 0.5,
-                Math.sin(i * 0.9) * 0.5 + 0.5
+                Math.sin(spiralAngle), 
+                Math.cos(spiralAngle * 0.7), 
+                Math.sin(spiralAngle * 1.3)
             );
             vec3.normalize(axis, axis);
-            var angle = (i * Math.PI / 3) + Math.random() * Math.PI * 0.5;
+            var angle = spiralAngle + Math.random() * Math.PI * 0.3;
             var rot = mat4.create();
             mat4.fromRotation(rot, angle, axis);
             vec3.transformMat4(currSet.xAxis, currSet.xAxis, rot);
             vec3.transformMat4(currSet.yAxis, currSet.yAxis, rot);
 
-            // Vary transparency - some fully opaque for depth, others translucent
-            if (i % 3 === 0) {
-                currSet.material.alpha = 1.0; // Solid neon objects
-                transparentMask[i] = false;
-            } else if (i % 3 === 1) {
-                currSet.material.alpha = 0.7; // Semi-transparent glow
-                transparentMask[i] = true;
-            } else {
-                currSet.material.alpha = 0.4; // Ethereal ghost objects
-                transparentMask[i] = true;
-            }
-
-            // Add position offset to create a scattered/exploded view
-            var offsetMagnitude = 0.15;
-            var offsetDirection = vec3.fromValues(
-                Math.sin(i * 2.1) * offsetMagnitude,
-                Math.cos(i * 1.7) * offsetMagnitude,
-                Math.sin(i * 2.5) * offsetMagnitude
+            // Create expanding spiral translation
+            var waveOffset = vec3.fromValues(
+                Math.cos(spiralAngle) * spiralRadius,
+                Math.sin(i * 0.8) * 0.2,
+                Math.sin(spiralAngle) * spiralRadius
             );
-            vec3.add(currSet.translation, currSet.translation, offsetDirection);
+            vec3.add(currSet.translation, currSet.translation, waveOffset);
         }
 
-        // Change light to create dramatic atmosphere
-        lightAmbient = vec3.fromValues(0.3, 0.2, 0.4); // Purple ambient
-        lightDiffuse = vec3.fromValues(1.2, 1.2, 1.5); // Bright diffuse
-        lightSpecular = vec3.fromValues(1.5, 1.5, 2.0); // Strong specular for shine
+        // Modify lighting for a more dramatic, ethereal atmosphere
+        lightAmbient = vec3.fromValues(0.4, 0.4, 0.5); // Soft ambient
+        lightDiffuse = vec3.fromValues(1.3, 1.2, 1.4); // Bright cool diffuse
+        lightSpecular = vec3.fromValues(2.0, 2.0, 2.0); // Very bright specular highlights
+        
+        console.log("Scene transformed with creative texture remapping, themed materials, spiral vortex layout, and varied transparency!");
     }
     
   });
