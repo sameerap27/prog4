@@ -769,112 +769,148 @@ function setupKeys() {
     if (e.key === "b" || e.key === "B") {
       blendMode = 1 - blendMode;
       if (blendModeULoc) gl.uniform1i(blendModeULoc, blendMode);
-      console.log("Blend mode toggled. Now: " + (blendMode === 0 ? "REPLACE (texture only)" : "MODULATE (lighting * texture)"));
     }
 
-    if (e.key === "!") {
-        console.log("Part 5: making scene interesting with creative texture remapping and transparency!");
+   if (e.key === "!") {
 
         // Available textures from the course
         var availableTextures = [
-            "https://ncsucgclass.github.io/prog4/abe.png",
-            "https://ncsucgclass.github.io/prog4/billie.jpg",
-            "https://ncsucgclass.github.io/prog4/earth.png",
-            "https://ncsucgclass.github.io/prog4/glass.gif",
-            "https://ncsucgclass.github.io/prog4/leaf.small.png",
-            "https://ncsucgclass.github.io/prog4/retro.jpg",
-            "https://ncsucgclass.github.io/prog4/rocktile.jpg",
-            "https://ncsucgclass.github.io/prog4/stars.jpg",
-            "https://ncsucgclass.github.io/prog4/tree.png"
+            "https://ncsucgclass.github.io/prog4/stars.jpg",      // 0 - background
+            "https://ncsucgclass.github.io/prog4/earth.png",      // 1 - planets
+            "https://ncsucgclass.github.io/prog4/tree.png",       // 2 - foreground nature
+            "https://ncsucgclass.github.io/prog4/leaf.small.png", // 3 - organic elements
+            "https://ncsucgclass.github.io/prog4/rocktile.jpg",   // 4 - ground/base
+            "https://ncsucgclass.github.io/prog4/glass.gif",      // 5 - transparent accents
+            "https://ncsucgclass.github.io/prog4/abe.png",        // 6 - character 1
+            "https://ncsucgclass.github.io/prog4/billie.jpg",     // 7 - character 2
+            "https://ncsucgclass.github.io/prog4/retro.jpg"       // 8 - decorative
         ];
 
-        // Apply creative textures and transformations to each set
+        // Create a scene: cosmic garden with characters
+        // Layer objects by depth: background (stars) -> midground (planets/nature) -> foreground (characters/glass)
+        
         for (var i = 0; i < numTriangleSets; i++) {
             var currSet = inputTriangles[i];
-
             if (!currSet.material) currSet.material = {};
             
-            // Assign textures in an interesting pattern - mix faces with nature and space
-            var texIndex = i % availableTextures.length;
-            var newTexUrl = availableTextures[texIndex];
+            var layer = i % 9; // 9 layers for our scene composition
+            var newTexUrl, translation, scale, alphaVal;
             
-            // Reload texture for this set
+            // Reset rotation to identity (no random rotation)
+            currSet.xAxis = vec3.fromValues(1, 0, 0);
+            currSet.yAxis = vec3.fromValues(0, 1, 0);
+            
+            switch(layer) {
+                case 0: // Stars background - far back, covering space
+                    newTexUrl = availableTextures[0];
+                    currSet.material.diffuse = [0.8, 0.8, 1.0];
+                    currSet.material.specular = [0.5, 0.5, 0.6];
+                    currSet.material.ambient = [0.6, 0.6, 0.7];
+                    currSet.material.n = 20;
+                    alphaVal = 0.9;
+                    vec3.set(currSet.translation, -0.3, 0.2, 0.4);
+                    transparentMask[i] = false;
+                    break;
+                    
+                case 1: // Earth/planet - mid-back depth
+                    newTexUrl = availableTextures[1];
+                    currSet.material.diffuse = [0.7, 0.8, 0.9];
+                    currSet.material.specular = [0.9, 0.9, 1.0];
+                    currSet.material.ambient = [0.3, 0.4, 0.5];
+                    currSet.material.n = 60;
+                    alphaVal = 0.85;
+                    vec3.set(currSet.translation, 0.3, 0.3, 0.3);
+                    transparentMask[i] = false;
+                    break;
+                    
+                case 2: // Trees - mid-depth left
+                    newTexUrl = availableTextures[2];
+                    currSet.material.diffuse = [0.5, 0.8, 0.5];
+                    currSet.material.specular = [0.4, 0.6, 0.4];
+                    currSet.material.ambient = [0.3, 0.5, 0.3];
+                    currSet.material.n = 30;
+                    alphaVal = 0.7;
+                    vec3.set(currSet.translation, -0.4, -0.1, 0.1);
+                    transparentMask[i] = true;
+                    break;
+                    
+                case 3: // Leaves - floating organic elements
+                    newTexUrl = availableTextures[3];
+                    currSet.material.diffuse = [0.6, 0.9, 0.6];
+                    currSet.material.specular = [0.5, 0.7, 0.5];
+                    currSet.material.ambient = [0.4, 0.6, 0.4];
+                    currSet.material.n = 35;
+                    alphaVal = 0.6;
+                    vec3.set(currSet.translation, 0.2, 0.4, 0.15);
+                    transparentMask[i] = true;
+                    break;
+                    
+                case 4: // Rock ground - bottom foundation
+                    newTexUrl = availableTextures[4];
+                    currSet.material.diffuse = [0.6, 0.5, 0.4];
+                    currSet.material.specular = [0.3, 0.3, 0.3];
+                    currSet.material.ambient = [0.4, 0.35, 0.3];
+                    currSet.material.n = 25;
+                    alphaVal = 1.0;
+                    vec3.set(currSet.translation, 0.0, -0.4, 0.2);
+                    transparentMask[i] = false;
+                    break;
+                    
+                case 5: // Glass accents - transparent floating elements
+                    newTexUrl = availableTextures[5];
+                    currSet.material.diffuse = [0.9, 0.95, 1.0];
+                    currSet.material.specular = [1.0, 1.0, 1.0];
+                    currSet.material.ambient = [0.5, 0.55, 0.6];
+                    currSet.material.n = 100;
+                    alphaVal = 0.25;
+                    vec3.set(currSet.translation, -0.2, 0.1, -0.1);
+                    transparentMask[i] = true;
+                    break;
+                    
+                case 6: // Abe character - foreground left
+                    newTexUrl = availableTextures[6];
+                    currSet.material.diffuse = [1.0, 0.9, 0.85];
+                    currSet.material.specular = [0.7, 0.6, 0.5];
+                    currSet.material.ambient = [0.5, 0.45, 0.4];
+                    currSet.material.n = 50;
+                    alphaVal = 0.8;
+                    vec3.set(currSet.translation, -0.3, -0.2, -0.15);
+                    transparentMask[i] = true;
+                    break;
+                    
+                case 7: // Billie character - foreground right
+                    newTexUrl = availableTextures[7];
+                    currSet.material.diffuse = [0.95, 0.85, 0.8];
+                    currSet.material.specular = [0.6, 0.5, 0.45];
+                    currSet.material.ambient = [0.5, 0.4, 0.35];
+                    currSet.material.n = 45;
+                    alphaVal = 0.75;
+                    vec3.set(currSet.translation, 0.4, -0.15, -0.12);
+                    transparentMask[i] = true;
+                    break;
+                    
+                case 8: // Retro decoration - accent pieces
+                    newTexUrl = availableTextures[8];
+                    currSet.material.diffuse = [0.9, 0.7, 0.6];
+                    currSet.material.specular = [0.5, 0.4, 0.3];
+                    currSet.material.ambient = [0.5, 0.4, 0.35];
+                    currSet.material.n = 40;
+                    alphaVal = 0.65;
+                    vec3.set(currSet.translation, 0.1, 0.0, 0.0);
+                    transparentMask[i] = true;
+                    break;
+            }
+            
+            currSet.material.alpha = alphaVal;
             loadTextureForSet(i, newTexUrl);
             textureURLs[i] = newTexUrl;
-            
-            // Create complementary color themes based on texture type
-            if (newTexUrl.includes('earth') || newTexUrl.includes('stars')) {
-                // Space theme - cool colors with high specular
-                currSet.material.diffuse = [0.3, 0.4, 0.8];
-                currSet.material.specular = [1.0, 1.0, 1.0];
-                currSet.material.n = 80;
-                currSet.material.alpha = 0.7 + Math.random() * 0.3;
-            } else if (newTexUrl.includes('leaf') || newTexUrl.includes('tree')) {
-                // Nature theme - greens with medium transparency
-                currSet.material.diffuse = [0.4, 0.8, 0.5];
-                currSet.material.specular = [0.6, 0.9, 0.6];
-                currSet.material.n = 40;
-                currSet.material.alpha = 0.5 + Math.random() * 0.4;
-                transparentMask[i] = true;
-            } else if (newTexUrl.includes('glass')) {
-                // Glass theme - very transparent with high specular
-                currSet.material.diffuse = [0.8, 0.9, 1.0];
-                currSet.material.specular = [1.0, 1.0, 1.0];
-                currSet.material.n = 100;
-                currSet.material.alpha = 0.2 + Math.random() * 0.3;
-                transparentMask[i] = true;
-            } else if (newTexUrl.includes('rock') || newTexUrl.includes('retro')) {
-                // Textured solids - earthy colors
-                currSet.material.diffuse = [0.7, 0.6, 0.5];
-                currSet.material.specular = [0.4, 0.4, 0.4];
-                currSet.material.n = 30;
-                currSet.material.alpha = 0.8 + Math.random() * 0.2;
-            } else {
-                // Face textures (abe, billie) - vibrant with varied transparency
-                currSet.material.diffuse = [0.9, 0.8, 0.7];
-                currSet.material.specular = [0.8, 0.7, 0.6];
-                currSet.material.n = 50;
-                currSet.material.alpha = 0.6 + Math.random() * 0.4;
-                transparentMask[i] = true;
-            }
-
-            // Enhanced ambient for glow effect
-            currSet.material.ambient = [
-                currSet.material.diffuse[0] * 0.5,
-                currSet.material.diffuse[1] * 0.5,
-                currSet.material.diffuse[2] * 0.5
-            ];
-
-            // Create spiral vortex pattern with rotations
-            var spiralAngle = (i / numTriangleSets) * Math.PI * 6;
-            var spiralRadius = 0.3 * (i / numTriangleSets);
-            var axis = vec3.fromValues(
-                Math.sin(spiralAngle), 
-                Math.cos(spiralAngle * 0.7), 
-                Math.sin(spiralAngle * 1.3)
-            );
-            vec3.normalize(axis, axis);
-            var angle = spiralAngle + Math.random() * Math.PI * 0.3;
-            var rot = mat4.create();
-            mat4.fromRotation(rot, angle, axis);
-            vec3.transformMat4(currSet.xAxis, currSet.xAxis, rot);
-            vec3.transformMat4(currSet.yAxis, currSet.yAxis, rot);
-
-            // Create expanding spiral translation
-            var waveOffset = vec3.fromValues(
-                Math.cos(spiralAngle) * spiralRadius,
-                Math.sin(i * 0.8) * 0.2,
-                Math.sin(spiralAngle) * spiralRadius
-            );
-            vec3.add(currSet.translation, currSet.translation, waveOffset);
         }
 
-        // Modify lighting for a more dramatic, ethereal atmosphere
-        lightAmbient = vec3.fromValues(0.4, 0.4, 0.5); // Soft ambient
-        lightDiffuse = vec3.fromValues(1.3, 1.2, 1.4); // Bright cool diffuse
-        lightSpecular = vec3.fromValues(2.0, 2.0, 2.0); // Very bright specular highlights
+        // Enhance lighting for the cosmic garden atmosphere
+        lightAmbient = vec3.fromValues(0.5, 0.5, 0.6); // Cool ambient light
+        lightDiffuse = vec3.fromValues(1.2, 1.1, 1.3); // Bright with slight blue tint
+        lightSpecular = vec3.fromValues(1.8, 1.8, 2.0); // Strong highlights
         
-        console.log("Scene transformed with creative texture remapping, themed materials, spiral vortex layout, and varied transparency!");
     }
     
   });
