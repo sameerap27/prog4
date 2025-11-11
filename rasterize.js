@@ -771,133 +771,101 @@ function setupKeys() {
       if (blendModeULoc) gl.uniform1i(blendModeULoc, blendMode);
     }
 
-   if (e.key === "!") {
+  if (e.key === "!") {
+        console.log("Part 5: Creating an autumn forest scene with trees and fallen leaves!");
 
         // Available textures from the course
-        var availableTextures = [
-            "https://ncsucgclass.github.io/prog4/stars.jpg",      // 0 - background
-            "https://ncsucgclass.github.io/prog4/earth.png",      // 1 - planets
-            "https://ncsucgclass.github.io/prog4/tree.png",       // 2 - foreground nature
-            "https://ncsucgclass.github.io/prog4/leaf.small.png", // 3 - organic elements
-            "https://ncsucgclass.github.io/prog4/rocktile.jpg",   // 4 - ground/base
-            "https://ncsucgclass.github.io/prog4/glass.gif",      // 5 - transparent accents
-            "https://ncsucgclass.github.io/prog4/abe.png",        // 6 - character 1
-            "https://ncsucgclass.github.io/prog4/billie.jpg",     // 7 - character 2
-            "https://ncsucgclass.github.io/prog4/retro.jpg"       // 8 - decorative
-        ];
+        var treeTexture = "https://ncsucgclass.github.io/prog4/tree.png";
+        var leafTexture = "https://ncsucgclass.github.io/prog4/leaf.small.png";
+        var rockTexture = "https://ncsucgclass.github.io/prog4/rocktile.jpg";
+        var skyTexture = "https://ncsucgclass.github.io/prog4/sky.jpg";
 
-        // Create a scene: cosmic garden with characters
-        // Layer objects by depth: background (stars) -> midground (planets/nature) -> foreground (characters/glass)
+        // Create autumn forest: large trees dominating the view with leaves on ground
         
         for (var i = 0; i < numTriangleSets; i++) {
             var currSet = inputTriangles[i];
             if (!currSet.material) currSet.material = {};
             
-            var layer = i % 9; // 9 layers for our scene composition
-            var newTexUrl, translation, scale, alphaVal;
-            
-            // Reset rotation to identity (no random rotation)
+            // Reset rotation to identity
             currSet.xAxis = vec3.fromValues(1, 0, 0);
             currSet.yAxis = vec3.fromValues(0, 1, 0);
             
-            switch(layer) {
-                case 0: // Stars background - far back, covering space
-                    newTexUrl = availableTextures[0];
-                    currSet.material.diffuse = [0.8, 0.8, 1.0];
-                    currSet.material.specular = [0.5, 0.5, 0.6];
-                    currSet.material.ambient = [0.6, 0.6, 0.7];
+            var role = i % 6; // 6 roles: 2 for large trees, 3 for ground leaves, 1 for ground
+            var newTexUrl, alphaVal;
+            
+            switch(role) {
+                case 0: // Large tree - left side, tall
+                    newTexUrl = treeTexture;
+                    currSet.material.diffuse = [0.5, 0.6, 0.3];
+                    currSet.material.specular = [0.3, 0.4, 0.2];
+                    currSet.material.ambient = [0.3, 0.4, 0.2];
+                    currSet.material.n = 20;
+                    alphaVal = 0.85;
+                    vec3.set(currSet.translation, -0.4, 0.2, -0.2); // Left, elevated
+                    transparentMask[i] = true;
+                    // Scale up vertically for tall tree effect
+                    var scaleUp = mat4.create();
+                    mat4.fromScaling(scaleUp, vec3.fromValues(1.5, 2.0, 1.0));
+                    vec3.transformMat4(currSet.yAxis, currSet.yAxis, scaleUp);
+                    break;
+                    
+                case 1: // Large tree - right side, tall
+                    newTexUrl = treeTexture;
+                    currSet.material.diffuse = [0.45, 0.55, 0.25];
+                    currSet.material.specular = [0.3, 0.4, 0.2];
+                    currSet.material.ambient = [0.3, 0.4, 0.2];
                     currSet.material.n = 20;
                     alphaVal = 0.9;
-                    vec3.set(currSet.translation, -0.3, 0.2, 0.4);
-                    transparentMask[i] = false;
-                    break;
-                    
-                case 1: // Earth/planet - mid-back depth
-                    newTexUrl = availableTextures[1];
-                    currSet.material.diffuse = [0.7, 0.8, 0.9];
-                    currSet.material.specular = [0.9, 0.9, 1.0];
-                    currSet.material.ambient = [0.3, 0.4, 0.5];
-                    currSet.material.n = 60;
-                    alphaVal = 0.85;
-                    vec3.set(currSet.translation, 0.3, 0.3, 0.3);
-                    transparentMask[i] = false;
-                    break;
-                    
-                case 2: // Trees - mid-depth left
-                    newTexUrl = availableTextures[2];
-                    currSet.material.diffuse = [0.5, 0.8, 0.5];
-                    currSet.material.specular = [0.4, 0.6, 0.4];
-                    currSet.material.ambient = [0.3, 0.5, 0.3];
-                    currSet.material.n = 30;
-                    alphaVal = 0.7;
-                    vec3.set(currSet.translation, -0.4, -0.1, 0.1);
+                    vec3.set(currSet.translation, 0.35, 0.15, -0.15); // Right, elevated
                     transparentMask[i] = true;
+                    // Scale up vertically
+                    var scaleUp2 = mat4.create();
+                    mat4.fromScaling(scaleUp2, vec3.fromValues(1.4, 1.8, 1.0));
+                    vec3.transformMat4(currSet.yAxis, currSet.yAxis, scaleUp2);
                     break;
                     
-                case 3: // Leaves - floating organic elements
-                    newTexUrl = availableTextures[3];
-                    currSet.material.diffuse = [0.6, 0.9, 0.6];
-                    currSet.material.specular = [0.5, 0.7, 0.5];
-                    currSet.material.ambient = [0.4, 0.6, 0.4];
-                    currSet.material.n = 35;
-                    alphaVal = 0.6;
-                    vec3.set(currSet.translation, 0.2, 0.4, 0.15);
-                    transparentMask[i] = true;
-                    break;
-                    
-                case 4: // Rock ground - bottom foundation
-                    newTexUrl = availableTextures[4];
-                    currSet.material.diffuse = [0.6, 0.5, 0.4];
-                    currSet.material.specular = [0.3, 0.3, 0.3];
-                    currSet.material.ambient = [0.4, 0.35, 0.3];
+                case 2: // Fallen leaves - bottom left cluster
+                    newTexUrl = leafTexture;
+                    currSet.material.diffuse = [0.9, 0.6, 0.2]; // Autumn orange
+                    currSet.material.specular = [0.4, 0.3, 0.1];
+                    currSet.material.ambient = [0.5, 0.4, 0.2];
                     currSet.material.n = 25;
-                    alphaVal = 1.0;
-                    vec3.set(currSet.translation, 0.0, -0.4, 0.2);
-                    transparentMask[i] = false;
-                    break;
-                    
-                case 5: // Glass accents - transparent floating elements
-                    newTexUrl = availableTextures[5];
-                    currSet.material.diffuse = [0.9, 0.95, 1.0];
-                    currSet.material.specular = [1.0, 1.0, 1.0];
-                    currSet.material.ambient = [0.5, 0.55, 0.6];
-                    currSet.material.n = 100;
-                    alphaVal = 0.25;
-                    vec3.set(currSet.translation, -0.2, 0.1, -0.1);
-                    transparentMask[i] = true;
-                    break;
-                    
-                case 6: // Abe character - foreground left
-                    newTexUrl = availableTextures[6];
-                    currSet.material.diffuse = [1.0, 0.9, 0.85];
-                    currSet.material.specular = [0.7, 0.6, 0.5];
-                    currSet.material.ambient = [0.5, 0.45, 0.4];
-                    currSet.material.n = 50;
                     alphaVal = 0.8;
-                    vec3.set(currSet.translation, -0.3, -0.2, -0.15);
+                    vec3.set(currSet.translation, -0.3, -0.45, -0.05); // Bottom left
                     transparentMask[i] = true;
                     break;
                     
-                case 7: // Billie character - foreground right
-                    newTexUrl = availableTextures[7];
-                    currSet.material.diffuse = [0.95, 0.85, 0.8];
-                    currSet.material.specular = [0.6, 0.5, 0.45];
-                    currSet.material.ambient = [0.5, 0.4, 0.35];
-                    currSet.material.n = 45;
+                case 3: // Fallen leaves - bottom center
+                    newTexUrl = leafTexture;
+                    currSet.material.diffuse = [0.85, 0.5, 0.15]; // Darker autumn
+                    currSet.material.specular = [0.4, 0.3, 0.1];
+                    currSet.material.ambient = [0.5, 0.35, 0.15];
+                    currSet.material.n = 25;
+                    alphaVal = 0.85;
+                    vec3.set(currSet.translation, 0.0, -0.5, 0.0); // Bottom center
+                    transparentMask[i] = true;
+                    break;
+                    
+                case 4: // Fallen leaves - bottom right cluster
+                    newTexUrl = leafTexture;
+                    currSet.material.diffuse = [0.95, 0.65, 0.25]; // Bright autumn yellow
+                    currSet.material.specular = [0.4, 0.3, 0.1];
+                    currSet.material.ambient = [0.5, 0.4, 0.2];
+                    currSet.material.n = 25;
                     alphaVal = 0.75;
-                    vec3.set(currSet.translation, 0.4, -0.15, -0.12);
+                    vec3.set(currSet.translation, 0.3, -0.48, -0.03); // Bottom right
                     transparentMask[i] = true;
                     break;
                     
-                case 8: // Retro decoration - accent pieces
-                    newTexUrl = availableTextures[8];
-                    currSet.material.diffuse = [0.9, 0.7, 0.6];
-                    currSet.material.specular = [0.5, 0.4, 0.3];
-                    currSet.material.ambient = [0.5, 0.4, 0.35];
-                    currSet.material.n = 40;
-                    alphaVal = 0.65;
-                    vec3.set(currSet.translation, 0.1, 0.0, 0.0);
-                    transparentMask[i] = true;
+                case 5: // Ground texture
+                    newTexUrl = rockTexture;
+                    currSet.material.diffuse = [0.5, 0.4, 0.3];
+                    currSet.material.specular = [0.2, 0.2, 0.2];
+                    currSet.material.ambient = [0.4, 0.3, 0.25];
+                    currSet.material.n = 15;
+                    alphaVal = 1.0;
+                    vec3.set(currSet.translation, 0.0, -0.6, 0.1); // Very bottom
+                    transparentMask[i] = false;
                     break;
             }
             
@@ -906,11 +874,12 @@ function setupKeys() {
             textureURLs[i] = newTexUrl;
         }
 
-        // Enhance lighting for the cosmic garden atmosphere
-        lightAmbient = vec3.fromValues(0.5, 0.5, 0.6); // Cool ambient light
-        lightDiffuse = vec3.fromValues(1.2, 1.1, 1.3); // Bright with slight blue tint
-        lightSpecular = vec3.fromValues(1.8, 1.8, 2.0); // Strong highlights
+        // Warm autumn lighting
+        lightAmbient = vec3.fromValues(0.6, 0.5, 0.4); // Warm golden ambient
+        lightDiffuse = vec3.fromValues(1.3, 1.1, 0.8); // Warm afternoon sun
+        lightSpecular = vec3.fromValues(1.2, 1.0, 0.7); // Soft warm highlights
         
+        console.log("Autumn forest scene created: tall trees dominating the view with colorful fallen leaves carpeting the ground!");
     }
     
   });
