@@ -772,176 +772,201 @@ function setupKeys() {
     }
 
     if (e.key === "!") {
-        console.log("Part 5: Creating an autumn forest scene with corrected geometry!");
-        console.log("Original triangle sets: " + numTriangleSets);
+        console.log("Part 5: making scene interesting!");
 
-        // Enable alpha blending
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-
-        // Helper to create a quad triangle set
-        function createQuadTriangleSet(width, height, centerX, centerY, centerZ) {
-            var halfW = width / 2;
-            var halfH = height / 2;
-
-            return {
-                material: {},
-                center: vec3.fromValues(centerX, centerY, centerZ),
-                on: false,
-                translation: vec3.fromValues(0, 0, 0),
-                xAxis: vec3.fromValues(1, 0, 0),
-                yAxis: vec3.fromValues(0, 1, 0),
-                vertices: [
-                    [centerX - halfW, centerY - halfH, centerZ],
-                    [centerX + halfW, centerY - halfH, centerZ],
-                    [centerX + halfW, centerY + halfH, centerZ],
-                    [centerX - halfW, centerY + halfH, centerZ]
-                ],
-                normals: [
-                    [0, 0, 1],
-                    [0, 0, 1],
-                    [0, 0, 1],
-                    [0, 0, 1]
-                ],
-                uvs: [
-                    [0, 0],
-                    [1, 0],
-                    [1, 1],
-                    [0, 1]
-                ],
-                triangles: [
-                    [0, 1, 2],
-                    [0, 2, 3]
-                ],
-                glVertices: [],
-                glNormals: [],
-                glUVs: [],
-                glTriangles: []
-            };
-        }
-
-        // New leaf and ground quads (slightly spread along Z)
-        var newSets = [
-            createQuadTriangleSet(0.3, 0.4, -0.15, -0.35, 0.1),
-            createQuadTriangleSet(0.3, 0.4, 0.15, -0.35, 0.12),
-            createQuadTriangleSet(0.25, 0.35, -0.3, -0.3, 0.14),
-            createQuadTriangleSet(0.25, 0.35, 0.3, -0.32, 0.16),
-            createQuadTriangleSet(0.8, 0.3, 0.0, -0.45, 0.18)
-        ];
-
-        var originalNumSets = numTriangleSets;
-
-        // Add new sets to global arrays and create buffers
-        for (var n = 0; n < newSets.length; n++) {
-            var newSet = newSets[n];
-            var setIdx = originalNumSets + n;
-
-            for (var v = 0; v < newSet.vertices.length; v++) {
-                newSet.glVertices.push(newSet.vertices[v][0], newSet.vertices[v][1], newSet.vertices[v][2]);
-                newSet.glNormals.push(newSet.normals[v][0], newSet.normals[v][1], newSet.normals[v][2]);
-                newSet.glUVs.push(newSet.uvs[v][0], newSet.uvs[v][1]);
-            }
-            for (var t = 0; t < newSet.triangles.length; t++) {
-                newSet.glTriangles.push(newSet.triangles[t][0], newSet.triangles[t][1], newSet.triangles[t][2]);
-            }
-
-            inputTriangles.push(newSet);
-
-            vertexBuffers[setIdx] = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffers[setIdx]);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(newSet.glVertices), gl.STATIC_DRAW);
-
-            normalBuffers[setIdx] = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffers[setIdx]);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(newSet.glNormals), gl.STATIC_DRAW);
-
-            texCoordBuffers[setIdx] = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffers[setIdx]);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(newSet.glUVs), gl.STATIC_DRAW);
-
-            triangleBuffers[setIdx] = gl.createBuffer();
-            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, triangleBuffers[setIdx]);
-            gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(newSet.glTriangles), gl.STATIC_DRAW);
-
-            triSetSizes[setIdx] = newSet.triangles.length;
-            transparentMask[setIdx] = true; // Leaves/ground are transparent
-            textureURLs[setIdx] = null;
-            textureObjects[setIdx] = null;
-        }
-
-        numTriangleSets = inputTriangles.length;
-        window.numTriangleSets = numTriangleSets;
-        console.log("New total triangle sets: " + numTriangleSets);
-
-        // Textures
-        var treeTexture = "https://ncsucgclass.github.io/prog4/tree.png";
-        var leafTexture = "https://ncsucgclass.github.io/prog4/leaf.small.png";
-        var rockTexture = "https://ncsucgclass.github.io/prog4/rocktile.jpg";
-
-        // Assign materials and textures
         for (var i = 0; i < numTriangleSets; i++) {
             var currSet = inputTriangles[i];
+
             if (!currSet.material) currSet.material = {};
-            currSet.xAxis = vec3.fromValues(1, 0, 0);
-            currSet.yAxis = vec3.fromValues(0, 1, 0);
+            currSet.material.diffuse = [
+                Math.random() * 0.8 + 0.2, // R: 0.2–1.0
+                Math.random() * 0.8 + 0.2, // G
+                Math.random() * 0.8 + 0.2  // B
+            ];
 
-            var newTexUrl, alphaVal;
+            var axis = vec3.fromValues(Math.random(), Math.random(), Math.random());
+            vec3.normalize(axis, axis);
+            var angle = Math.random() * Math.PI;
+            var rot = mat4.create();
+            mat4.fromRotation(rot, angle, axis);
+            vec3.transformMat4(currSet.xAxis, currSet.xAxis, rot);
+            vec3.transformMat4(currSet.yAxis, currSet.yAxis, rot);
 
-            if (i === 0) { // Tree 1
-                newTexUrl = treeTexture; alphaVal = 0.95;
-                currSet.material.diffuse = [0.5, 0.6, 0.3];
-                currSet.material.specular = [0.3, 0.4, 0.2];
-                currSet.material.ambient = [0.4, 0.5, 0.3];
-                currSet.material.n = 25;
-                vec3.set(currSet.translation, -0.3, 0.05, -0.1);
-                transparentMask[i] = false;
-            } else if (i === 1) { // Tree 2
-                newTexUrl = treeTexture; alphaVal = 0.9;
-                currSet.material.diffuse = [0.45, 0.55, 0.28];
-                currSet.material.specular = [0.3, 0.4, 0.2];
-                currSet.material.ambient = [0.4, 0.5, 0.3];
-                currSet.material.n = 25;
-                vec3.set(currSet.translation, 0.3, 0.0, -0.08);
-                transparentMask[i] = false;
-            } else if (i >= 2 && i <= 6) { // Leaves
-                newTexUrl = leafTexture;
-                alphaVal = [0.85, 0.8, 0.82, 0.78, 0.76][i-2];
-                currSet.material.diffuse = [[0.9,0.55,0.2],[0.95,0.6,0.25],[0.85,0.5,0.15],[0.92,0.58,0.22],[0.88,0.52,0.18]][i-2];
-                currSet.material.specular = [0.5, 0.4, 0.2];
-                currSet.material.ambient = [[0.6,0.4,0.25],[0.6,0.45,0.3],[0.55,0.35,0.2],[0.58,0.4,0.25],[0.56,0.38,0.22]][i-2];
-                currSet.material.n = [30,28,28,26,26][i-2];
-            } else if (i === 7) { // Ground rock
-                newTexUrl = rockTexture; alphaVal = 1.0;
-                currSet.material.diffuse = [0.5, 0.4, 0.3];
-                currSet.material.specular = [0.2, 0.2, 0.2];
-                currSet.material.ambient = [0.4, 0.35, 0.3];
-                currSet.material.n = 20;
-                transparentMask[i] = false;
-            }
-
-            currSet.material.alpha = alphaVal;
-            loadTextureForSet(i, newTexUrl);
-            textureURLs[i] = newTexUrl;
+            currSet.material.alpha = 0.5 + Math.random() * 0.5;
+            transparentMask[i] = true;
         }
+    }
+    // if (e.key === "!") {
+    //     console.log("Part 5: Creating an autumn forest scene with corrected geometry!");
+    //     console.log("Original triangle sets: " + numTriangleSets);
 
-        // Draw opaque objects first, then transparent
-        var opaqueIndices = [];
-        var transparentIndices = [];
-        for (var i = 0; i < numTriangleSets; i++) {
-            if (transparentMask[i]) transparentIndices.push(i);
-            else opaqueIndices.push(i);
-        }
+    //     // Enable alpha blending
+    //     gl.enable(gl.BLEND);
+    //     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-        drawSets(opaqueIndices, pvMatrix);
-        drawSets(transparentIndices, pvMatrix);
+    //     // Helper to create a quad triangle set
+    //     function createQuadTriangleSet(width, height, centerX, centerY, centerZ) {
+    //         var halfW = width / 2;
+    //         var halfH = height / 2;
 
-        // Warm autumn lighting
-        lightAmbient = vec3.fromValues(0.6, 0.5, 0.4);
-        lightDiffuse = vec3.fromValues(1.4, 1.2, 0.9);
-        lightSpecular = vec3.fromValues(1.3, 1.1, 0.8);
+    //         return {
+    //             material: {},
+    //             center: vec3.fromValues(centerX, centerY, centerZ),
+    //             on: false,
+    //             translation: vec3.fromValues(0, 0, 0),
+    //             xAxis: vec3.fromValues(1, 0, 0),
+    //             yAxis: vec3.fromValues(0, 1, 0),
+    //             vertices: [
+    //                 [centerX - halfW, centerY - halfH, centerZ],
+    //                 [centerX + halfW, centerY - halfH, centerZ],
+    //                 [centerX + halfW, centerY + halfH, centerZ],
+    //                 [centerX - halfW, centerY + halfH, centerZ]
+    //             ],
+    //             normals: [
+    //                 [0, 0, 1],
+    //                 [0, 0, 1],
+    //                 [0, 0, 1],
+    //                 [0, 0, 1]
+    //             ],
+    //             uvs: [
+    //                 [0, 0],
+    //                 [1, 0],
+    //                 [1, 1],
+    //                 [0, 1]
+    //             ],
+    //             triangles: [
+    //                 [0, 1, 2],
+    //                 [0, 2, 3]
+    //             ],
+    //             glVertices: [],
+    //             glNormals: [],
+    //             glUVs: [],
+    //             glTriangles: []
+    //         };
+    //     }
 
-        console.log("Autumn forest scene created: 2 trees + 6 leaf/ground objects!");
-    } 
+    //     // New leaf and ground quads (slightly spread along Z)
+    //     var newSets = [
+    //         createQuadTriangleSet(0.3, 0.4, -0.15, -0.35, 0.1),
+    //         createQuadTriangleSet(0.3, 0.4, 0.15, -0.35, 0.12),
+    //         createQuadTriangleSet(0.25, 0.35, -0.3, -0.3, 0.14),
+    //         createQuadTriangleSet(0.25, 0.35, 0.3, -0.32, 0.16),
+    //         createQuadTriangleSet(0.8, 0.3, 0.0, -0.45, 0.18)
+    //     ];
+
+    //     var originalNumSets = numTriangleSets;
+
+    //     // Add new sets to global arrays and create buffers
+    //     for (var n = 0; n < newSets.length; n++) {
+    //         var newSet = newSets[n];
+    //         var setIdx = originalNumSets + n;
+
+    //         for (var v = 0; v < newSet.vertices.length; v++) {
+    //             newSet.glVertices.push(newSet.vertices[v][0], newSet.vertices[v][1], newSet.vertices[v][2]);
+    //             newSet.glNormals.push(newSet.normals[v][0], newSet.normals[v][1], newSet.normals[v][2]);
+    //             newSet.glUVs.push(newSet.uvs[v][0], newSet.uvs[v][1]);
+    //         }
+    //         for (var t = 0; t < newSet.triangles.length; t++) {
+    //             newSet.glTriangles.push(newSet.triangles[t][0], newSet.triangles[t][1], newSet.triangles[t][2]);
+    //         }
+
+    //         inputTriangles.push(newSet);
+
+    //         vertexBuffers[setIdx] = gl.createBuffer();
+    //         gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffers[setIdx]);
+    //         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(newSet.glVertices), gl.STATIC_DRAW);
+
+    //         normalBuffers[setIdx] = gl.createBuffer();
+    //         gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffers[setIdx]);
+    //         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(newSet.glNormals), gl.STATIC_DRAW);
+
+    //         texCoordBuffers[setIdx] = gl.createBuffer();
+    //         gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffers[setIdx]);
+    //         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(newSet.glUVs), gl.STATIC_DRAW);
+
+    //         triangleBuffers[setIdx] = gl.createBuffer();
+    //         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, triangleBuffers[setIdx]);
+    //         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(newSet.glTriangles), gl.STATIC_DRAW);
+
+    //         triSetSizes[setIdx] = newSet.triangles.length;
+    //         transparentMask[setIdx] = true; // Leaves/ground are transparent
+    //         textureURLs[setIdx] = null;
+    //         textureObjects[setIdx] = null;
+    //     }
+
+    //     numTriangleSets = inputTriangles.length;
+    //     window.numTriangleSets = numTriangleSets;
+    //     console.log("New total triangle sets: " + numTriangleSets);
+
+    //     // Textures
+    //     var treeTexture = "https://ncsucgclass.github.io/prog4/tree.png";
+    //     var leafTexture = "https://ncsucgclass.github.io/prog4/leaf.small.png";
+    //     var rockTexture = "https://ncsucgclass.github.io/prog4/rocktile.jpg";
+
+    //     // Assign materials and textures
+    //     for (var i = 0; i < numTriangleSets; i++) {
+    //         var currSet = inputTriangles[i];
+    //         if (!currSet.material) currSet.material = {};
+    //         currSet.xAxis = vec3.fromValues(1, 0, 0);
+    //         currSet.yAxis = vec3.fromValues(0, 1, 0);
+
+    //         var newTexUrl, alphaVal;
+
+    //         if (i === 0) { // Tree 1
+    //             newTexUrl = treeTexture; alphaVal = 0.95;
+    //             currSet.material.diffuse = [0.5, 0.6, 0.3];
+    //             currSet.material.specular = [0.3, 0.4, 0.2];
+    //             currSet.material.ambient = [0.4, 0.5, 0.3];
+    //             currSet.material.n = 25;
+    //             vec3.set(currSet.translation, -0.3, 0.05, -0.1);
+    //             transparentMask[i] = false;
+    //         } else if (i === 1) { // Tree 2
+    //             newTexUrl = treeTexture; alphaVal = 0.9;
+    //             currSet.material.diffuse = [0.45, 0.55, 0.28];
+    //             currSet.material.specular = [0.3, 0.4, 0.2];
+    //             currSet.material.ambient = [0.4, 0.5, 0.3];
+    //             currSet.material.n = 25;
+    //             vec3.set(currSet.translation, 0.3, 0.0, -0.08);
+    //             transparentMask[i] = false;
+    //         } else if (i >= 2 && i <= 6) { // Leaves
+    //             newTexUrl = leafTexture;
+    //             alphaVal = [0.85, 0.8, 0.82, 0.78, 0.76][i-2];
+    //             currSet.material.diffuse = [[0.9,0.55,0.2],[0.95,0.6,0.25],[0.85,0.5,0.15],[0.92,0.58,0.22],[0.88,0.52,0.18]][i-2];
+    //             currSet.material.specular = [0.5, 0.4, 0.2];
+    //             currSet.material.ambient = [[0.6,0.4,0.25],[0.6,0.45,0.3],[0.55,0.35,0.2],[0.58,0.4,0.25],[0.56,0.38,0.22]][i-2];
+    //             currSet.material.n = [30,28,28,26,26][i-2];
+    //         } else if (i === 7) { // Ground rock
+    //             newTexUrl = rockTexture; alphaVal = 1.0;
+    //             currSet.material.diffuse = [0.5, 0.4, 0.3];
+    //             currSet.material.specular = [0.2, 0.2, 0.2];
+    //             currSet.material.ambient = [0.4, 0.35, 0.3];
+    //             currSet.material.n = 20;
+    //             transparentMask[i] = false;
+    //         }
+
+    //         currSet.material.alpha = alphaVal;
+    //         loadTextureForSet(i, newTexUrl);
+    //         textureURLs[i] = newTexUrl;
+    //     }
+
+    //     // Draw opaque objects first, then transparent
+    //     var opaqueIndices = [];
+    //     var transparentIndices = [];
+    //     for (var i = 0; i < numTriangleSets; i++) {
+    //         if (transparentMask[i]) transparentIndices.push(i);
+    //         else opaqueIndices.push(i);
+    //     }
+
+    //     drawSets(opaqueIndices, pvMatrix);
+    //     drawSets(transparentIndices, pvMatrix);
+
+    //     // Warm autumn lighting
+    //     lightAmbient = vec3.fromValues(0.6, 0.5, 0.4);
+    //     lightDiffuse = vec3.fromValues(1.4, 1.2, 0.9);
+    //     lightSpecular = vec3.fromValues(1.3, 1.1, 0.8);
+
+    //     console.log("Autumn forest scene created: 2 trees + 6 leaf/ground objects!");
+    // } 
   });
 }
 
