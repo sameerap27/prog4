@@ -34,7 +34,6 @@ var ambientULoc; // where to put ambient reflecivity for fragment shader
 var diffuseULoc; // where to put diffuse reflecivity for fragment shader
 var specularULoc; // where to put specular reflecivity for fragment shader
 var shininessULoc; // where to put specular exponent for fragment shader
-
 var eyePositionULoc; // location of eye uniform
 var blendModeULoc; // location of blend mode uniform
 var textureULoc; // location of sampler2D
@@ -48,8 +47,6 @@ var Up = vec3.clone(defaultUp); // view up vector in world space
 /* rendering controls */
 var blendMode = 1; // 0 = REPLACE (texture only), 1 = MODULATE (texture * lighting)
 var transparentMask = []; // boolean per set: whether it should be treated as transparent
-
-var part5Mode = false;
 
 // ASSIGNMENT HELPER FUNCTIONS
 
@@ -231,7 +228,6 @@ function setupWebGL() {
         // enable blending (we'll control depthMask when drawing transparent objects)
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-        
       }
     } // end try
     
@@ -416,208 +412,271 @@ function loadTextureForSet(setIndex, url) {
     img.src = url;
 }
 
+// setup the webGL shaders
 function setupShaders() {
-
-    // Vertex Shader
+    
+    // define vertex shader in essl using es6 template strings
     var vShaderCode = `
-        attribute vec3 aVertexPosition;
-        attribute vec3 aVertexNormal;
-        attribute vec2 aVertexUV; // texture coordinates
+        attribute vec3 aVertexPosition; // vertex position
+        attribute vec3 aVertexNormal; // vertex normal
+        attribute vec2 aTexCoord; // texture coordinate
         
-        uniform mat4 umMatrix;
-        uniform mat4 upvmMatrix;
+        uniform mat4 umMatrix; // the model matrix
+        uniform mat4 upvmMatrix; // the project view model matrix
         
-        varying vec3 vWorldPos;
-        varying vec3 vVertexNormal;
-        varying vec2 vUV; // pass UV to fragment shader
+        varying vec3 vWorldPos; // interpolated world position of vertex
+        varying vec3 vVertexNormal; // interpolated normal for frag shader
+        varying vec2 vTexCoord; // interpolated tex coord for fragment
 
         void main(void) {
-            vec4 worldPos4 = umMatrix * vec4(aVertexPosition, 1.0);
-            vWorldPos = vec3(worldPos4);
+            
+            // vertex position
+            vec4 vWorldPos4 = umMatrix * vec4(aVertexPosition, 1.0);
+            vWorldPos = vec3(vWorldPos4.x,vWorldPos4.y,vWorldPos4.z);
             gl_Position = upvmMatrix * vec4(aVertexPosition, 1.0);
 
-            vec4 worldNormal4 = umMatrix * vec4(aVertexNormal, 0.0);
-            vVertexNormal = normalize(vec3(worldNormal4));
-            vUV = aVertexUV; // pass UV
+            // vertex normal (assume no non-uniform scale)
+            vec4 vWorldNormal4 = umMatrix * vec4(aVertexNormal, 0.0);
+            vVertexNormal = normalize(vec3(vWorldNormal4.x,vWorldNormal4.y,vWorldNormal4.z)); 
+
+            // pass uv through
+            vTexCoord = aTexCoord;
         }
     `;
-
-    // Fragment Shader
+    
+    // define fragment shader in essl using es6 template strings
     var fShaderCode = `
-        precision mediump float;
+        precision mediump float; // set float to medium precision
 
-        uniform vec3 uEyePosition;
-        uniform vec3 uLightAmbient;
-        uniform vec3 uLightDiffuse;
-        uniform vec3 uLightSpecular;
-        uniform vec3 uLightPosition;
-
-        uniform vec3 uAmbient;
-        uniform vec3 uDiffuse;
-        uniform vec3 uSpecular;
-        uniform float uShininess;
-
-        uniform sampler2D uTexture; // texture sampler
-        uniform float uAlpha; // transparency
-        uniform int uBlendMode; // 0 = replace, 1 = modulate
-
-        varying vec3 vWorldPos;
-        varying vec3 vVertexNormal;
-        varying vec2 vUV;
-
+        // eye location
+        uniform vec3 uEyePosition; // the eye's position in world
+        
+        // light properties
+        uniform vec3 uLightAmbient; // the light's ambient color
+        uniform vec3 uLightDiffuse; // the light's diffuse color
+        uniform vec3 uLightSpecular; // the light's specular color
+        uniform vec3 uLightPosition; // the light's position
+        
+        // material properties
+        uniform vec3 uAmbient; // the ambient reflectivity
+        uniform vec3 uDiffuse; // the diffuse reflectivity
+        uniform vec3 uSpecular; // the specular reflectivity
+        uniform float uShininess; // the specular exponent
+        uniform float uMaterialAlpha; // material-level alpha multiplier (default 1.0)
+        
+        // texture and blend mode
+        uniform sampler2D uTexture;
+        uniform int uBlendMode; // 0 = REPLACE, 1 = MODULATE
+        
+        // geometry properties
+        varying vec3 vWorldPos; // world xyz of fragment
+        varying vec3 vVertexNormal; // normal of fragment
+        varying vec2 vTexCoord; // uv coordinate
+            
         void main(void) {
-            // basic Phong lighting
-            vec3 ambient = uAmbient * uLightAmbient;
+        
+            // SAMPLE TEXTURE
+            vec4 Ct = texture2D(uTexture, vTexCoord);
 
-            vec3 normal = normalize(vVertexNormal);
+            // ambient term
+            vec3 ambient = uAmbient * uLightAmbient; 
+            
+            // diffuse term
+            vec3 normal = normalize(vVertexNormal); 
             vec3 light = normalize(uLightPosition - vWorldPos);
-            float lambert = max(0.0, dot(normal, light));
-            vec3 diffuse = uDiffuse * uLightDiffuse * lambert;
-
+            float lambert = max(0.0,dot(normal,light));
+            vec3 diffuse = uDiffuse * uLightDiffuse * lambert; // diffuse term
+            
+            // specular term (Blinn-Phong)
             vec3 eye = normalize(uEyePosition - vWorldPos);
             vec3 halfVec = normalize(light + eye);
-            float highlight = pow(max(0.0, dot(normal, halfVec)), uShininess);
-            vec3 specular = uSpecular * uLightSpecular * highlight;
+            float highlight = pow(max(0.0,dot(normal,halfVec)), uShininess);
+            vec3 specular = uSpecular * uLightSpecular * highlight; // specular term
+            
+            // combine to lighting color
+            vec3 Cf = ambient + diffuse + specular;
+            Cf = clamp(Cf, 0.0, 1.0);
 
-            vec3 litColor = ambient + diffuse + specular;
-
-            // sample texture
-            vec4 texColor = texture2D(uTexture, vUV);
-
-            // blending modes
-            vec3 finalColor;
+            // choose blend mode
             if (uBlendMode == 0) {
-                finalColor = texColor.rgb; // replace
+                // REPLACE: draw texture directly (unlit)
+                gl_FragColor = vec4(Ct.rgb, Ct.a * uMaterialAlpha);
             } else {
-                finalColor = texColor.rgb * litColor; // modulate
+                // MODULATE: lighting modulates texture
+                vec3 rgb = Cf * Ct.rgb;
+                float alpha = Ct.a * uMaterialAlpha;
+                gl_FragColor = vec4(rgb, alpha);
             }
-
-            gl_FragColor = vec4(finalColor, uAlpha * texColor.a);
         }
     `;
-
+    
     try {
-        var fShader = gl.createShader(gl.FRAGMENT_SHADER);
-        gl.shaderSource(fShader, fShaderCode);
-        gl.compileShader(fShader);
+        var fShader = gl.createShader(gl.FRAGMENT_SHADER); // create frag shader
+        gl.shaderSource(fShader,fShaderCode); // attach code to shader
+        gl.compileShader(fShader); // compile the code for gpu execution
 
-        var vShader = gl.createShader(gl.VERTEX_SHADER);
-        gl.shaderSource(vShader, vShaderCode);
-        gl.compileShader(vShader);
+        var vShader = gl.createShader(gl.VERTEX_SHADER); // create vertex shader
+        gl.shaderSource(vShader,vShaderCode); // attach code to shader
+        gl.compileShader(vShader); // compile the code for gpu execution
+            
+        if (!gl.getShaderParameter(fShader, gl.COMPILE_STATUS)) { // bad frag shader compile
+            throw "error during fragment shader compile: " + gl.getShaderInfoLog(fShader);  
+            gl.deleteShader(fShader);
+        } else if (!gl.getShaderParameter(vShader, gl.COMPILE_STATUS)) { // bad vertex shader compile
+            throw "error during vertex shader compile: " + gl.getShaderInfoLog(vShader);  
+            gl.deleteShader(vShader);
+        } else { // no compile errors
+            var shaderProgram = gl.createProgram(); // create the single shader program
+            gl.attachShader(shaderProgram, fShader); // put frag shader in program
+            gl.attachShader(shaderProgram, vShader); // put vertex shader in program
+            gl.linkProgram(shaderProgram); // link program into gl context
 
-        if (!gl.getShaderParameter(fShader, gl.COMPILE_STATUS)) {
-            throw "Fragment shader compile error: " + gl.getShaderInfoLog(fShader);
-        } else if (!gl.getShaderParameter(vShader, gl.COMPILE_STATUS)) {
-            throw "Vertex shader compile error: " + gl.getShaderInfoLog(vShader);
-        } else {
-            var shaderProgram = gl.createProgram();
-            gl.attachShader(shaderProgram, fShader);
-            gl.attachShader(shaderProgram, vShader);
-            gl.linkProgram(shaderProgram);
+            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) { // bad program link
+                throw "error during shader program linking: " + gl.getProgramInfoLog(shaderProgram);
+            } else { // no shader program link errors
+                gl.useProgram(shaderProgram); // activate shader program (frag and vert)
+                
+                // locate and enable vertex attributes
+                vPosAttribLoc = gl.getAttribLocation(shaderProgram, "aVertexPosition"); // ptr to vertex pos attrib
+                gl.enableVertexAttribArray(vPosAttribLoc); // connect attrib to array
+                vNormAttribLoc = gl.getAttribLocation(shaderProgram, "aVertexNormal"); // ptr to vertex normal attrib
+                gl.enableVertexAttribArray(vNormAttribLoc); // connect attrib to array
+                vTexAttribLoc = gl.getAttribLocation(shaderProgram, "aTexCoord");
+                gl.enableVertexAttribArray(vTexAttribLoc);
 
-            if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-                throw "Shader program link error: " + gl.getProgramInfoLog(shaderProgram);
-            } else {
-                gl.useProgram(shaderProgram);
+                // locate vertex uniforms
+                mMatrixULoc = gl.getUniformLocation(shaderProgram, "umMatrix"); // ptr to mmat
+                pvmMatrixULoc = gl.getUniformLocation(shaderProgram, "upvmMatrix"); // ptr to pvmmat
+                
+                // locate fragment uniforms
+                eyePositionULoc = gl.getUniformLocation(shaderProgram, "uEyePosition"); // ptr to eye position
+                var lightAmbientULoc = gl.getUniformLocation(shaderProgram, "uLightAmbient"); // ptr to light ambient
+                var lightDiffuseULoc = gl.getUniformLocation(shaderProgram, "uLightDiffuse"); // ptr to light diffuse
+                var lightSpecularULoc = gl.getUniformLocation(shaderProgram, "uLightSpecular"); // ptr to light specular
+                var lightPositionULoc = gl.getUniformLocation(shaderProgram, "uLightPosition"); // ptr to light position
+                ambientULoc = gl.getUniformLocation(shaderProgram, "uAmbient"); // ptr to ambient
+                diffuseULoc = gl.getUniformLocation(shaderProgram, "uDiffuse"); // ptr to diffuse
+                specularULoc = gl.getUniformLocation(shaderProgram, "uSpecular"); // ptr to specular
+                shininessULoc = gl.getUniformLocation(shaderProgram, "uShininess"); // ptr to shininess
+                materialAlphaULoc = gl.getUniformLocation(shaderProgram, "uMaterialAlpha"); // ptr to alpha
+                blendModeULoc = gl.getUniformLocation(shaderProgram, "uBlendMode"); // ptr to blend mode
+                textureULoc = gl.getUniformLocation(shaderProgram, "uTexture"); // ptr to sampler2D
 
-                vPosAttribLoc = gl.getAttribLocation(shaderProgram, "aVertexPosition");
-                gl.enableVertexAttribArray(vPosAttribLoc);
-                vNormAttribLoc = gl.getAttribLocation(shaderProgram, "aVertexNormal");
-                gl.enableVertexAttribArray(vNormAttribLoc);
-                vUVAttribLoc = gl.getAttribLocation(shaderProgram, "aVertexUV");
-                gl.enableVertexAttribArray(vUVAttribLoc);
+                // pass global constants into fragment uniforms (initial)
+                gl.uniform3fv(eyePositionULoc, Eye); // pass in the eye's position
+                gl.uniform3fv(lightAmbientULoc, lightAmbient); // pass in the light's ambient emission
+                gl.uniform3fv(lightDiffuseULoc, lightDiffuse); // pass in the light's diffuse emission
+                gl.uniform3fv(lightSpecularULoc, lightSpecular); // pass in the light's specular emission
+                gl.uniform3fv(lightPositionULoc, lightPosition); // pass in the light's position
 
-                mMatrixULoc = gl.getUniformLocation(shaderProgram, "umMatrix");
-                pvmMatrixULoc = gl.getUniformLocation(shaderProgram, "upvmMatrix");
+                // default blend mode
+                gl.uniform1i(blendModeULoc, blendMode);
+                // default material alpha
+                gl.uniform1f(materialAlphaULoc, 1.0);
 
-                ambientULoc = gl.getUniformLocation(shaderProgram, "uAmbient");
-                diffuseULoc = gl.getUniformLocation(shaderProgram, "uDiffuse");
-                specularULoc = gl.getUniformLocation(shaderProgram, "uSpecular");
-                shininessULoc = gl.getUniformLocation(shaderProgram, "uShininess");
-
-                eyePositionULoc = gl.getUniformLocation(shaderProgram, "uEyePosition");
-                lightAmbientULoc = gl.getUniformLocation(shaderProgram, "uLightAmbient");
-                lightDiffuseULoc = gl.getUniformLocation(shaderProgram, "uLightDiffuse");
-                lightSpecularULoc = gl.getUniformLocation(shaderProgram, "uLightSpecular");
-                lightPositionULoc = gl.getUniformLocation(shaderProgram, "uLightPosition");
-
-                textureULoc = gl.getUniformLocation(shaderProgram, "uTexture");
-                alphaULoc = gl.getUniformLocation(shaderProgram, "uAlpha");
-                blendModeULoc = gl.getUniformLocation(shaderProgram, "uBlendMode");
-
-                gl.uniform3fv(eyePositionULoc, Eye);
-                gl.uniform3fv(lightAmbientULoc, lightAmbient);
-                gl.uniform3fv(lightDiffuseULoc, lightDiffuse);
-                gl.uniform3fv(lightSpecularULoc, lightSpecular);
-                gl.uniform3fv(lightPositionULoc, lightPosition);
-            }
-        }
-    } catch (e) {
+                // bind texture unit 0 to sampler uniform
+                gl.uniform1i(textureULoc, 0);
+            } // end if no shader program link errors
+        } // end if no compile errors
+    } // end try 
+    
+    catch(e) {
         console.log(e);
-    }
-}
+    } // end catch
+} // end setup shaders
 
+// render the loaded model
 function renderModels() {
-
+    
+    // construct the model transform matrix, based on model state
     function makeModelTransform(currModel) {
         var zAxis = vec3.create(), sumRotation = mat4.create(), temp = mat4.create(), negCtr = vec3.create();
 
-        mat4.fromTranslation(mMatrix, vec3.negate(negCtr, currModel.center));
+        // move the model to the origin
+        mat4.fromTranslation(mMatrix,vec3.negate(negCtr,currModel.center)); 
+        
+        // scale for highlighting if needed
         if (currModel.on)
-            mat4.multiply(mMatrix, mat4.fromScaling(temp, vec3.fromValues(1.2, 1.2, 1.2)), mMatrix);
-
-        vec3.normalize(zAxis, vec3.cross(zAxis, currModel.xAxis, currModel.yAxis));
-        mat4.set(sumRotation,
+            mat4.multiply(mMatrix,mat4.fromScaling(temp,vec3.fromValues(1.2,1.2,1.2)),mMatrix); // S(1.2) * T(-ctr)
+        
+        // rotate the model to current interactive orientation
+        vec3.normalize(zAxis,vec3.cross(zAxis,currModel.xAxis,currModel.yAxis)); // get the new model z axis
+        mat4.set(sumRotation, // get the composite rotation
             currModel.xAxis[0], currModel.yAxis[0], zAxis[0], 0,
             currModel.xAxis[1], currModel.yAxis[1], zAxis[1], 0,
             currModel.xAxis[2], currModel.yAxis[2], zAxis[2], 0,
             0, 0,  0, 1);
-        mat4.multiply(mMatrix, sumRotation, mMatrix);
+        mat4.multiply(mMatrix,sumRotation,mMatrix); // R(ax) * S(1.2) * T(-ctr)
+        
+        // translate back to model center
+        mat4.multiply(mMatrix,mat4.fromTranslation(temp,currModel.center),mMatrix); // T(ctr) * R(ax) * S(1.2) * T(-ctr)
 
-        mat4.multiply(mMatrix, mat4.fromTranslation(temp, currModel.center), mMatrix);
-        mat4.multiply(mMatrix, mat4.fromTranslation(temp, currModel.translation), mMatrix);
+        // translate model to current interactive orientation
+        mat4.multiply(mMatrix,mat4.fromTranslation(temp,currModel.translation),mMatrix); // T(pos)*T(ctr)*R(ax)*S(1.2)*T(-ctr)
+        
+    } // end make model transform
+    
+    // matrices
+    var pMatrix = mat4.create(); // projection matrix
+    var vMatrix = mat4.create(); // view matrix
+    var mMatrix = mat4.create(); // model matrix
+    var pvMatrix = mat4.create(); // proj * view matrices
+    var pvmMatrix = mat4.create(); // proj * view * model matrices
+    
+    window.requestAnimationFrame(renderModels); // set up frame render callback
+    
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT); // clear frame/depth buffers
+    
+    // set up projection and view
+    mat4.perspective(pMatrix,0.5*Math.PI,1,0.1,10); // create projection matrix
+    mat4.lookAt(vMatrix,Eye,Center,Up); // create view matrix
+    mat4.multiply(pvMatrix,pvMatrix,pMatrix); // projection
+    mat4.multiply(pvMatrix,pvMatrix,vMatrix); // projection * view
+
+    // update eye uniform in shader (eye can move)
+    if (eyePositionULoc) gl.uniform3fv(eyePositionULoc, Eye);
+    // update blend mode uniform every frame
+    if (blendModeULoc) gl.uniform1i(blendModeULoc, blendMode);
+
+    // prepare two lists: opaque sets and transparent sets
+    var opaqueSets = [];
+    var transparentSets = [];
+
+    for (var i=0; i<numTriangleSets; i++) {
+        // determine transparency: check transparentMask or curr material.alpha
+        var curr = inputTriangles[i];
+        var materialAlpha = 1.0;
+        if (curr.material && typeof curr.material.alpha === "number") materialAlpha = curr.material.alpha;
+        var isTransparent = transparentMask[i] || (materialAlpha < 1.0);
+        if (isTransparent) transparentSets.push(i); else opaqueSets.push(i);
     }
 
-    var pMatrix = mat4.create();
-    var vMatrix = mat4.create();
-    var mMatrix = mat4.create();
-    var pvMatrix = mat4.create();
-    var pvmMatrix = mat4.create();
+    // First draw opaque sets (depth writes on)
+    gl.depthMask(true);
+    drawSets(opaqueSets, pvMatrix);
 
-    window.requestAnimationFrame(renderModels);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    // Then draw transparent sets sorted back-to-front
+    if (transparentSets.length > 0) {
+        // compute centroid distances (approx) and sort descending
+        var sortList = transparentSets.map(function(i) {
+            // compute world-space center for approximate distance
+            var center = vec3.clone(inputTriangles[i].center);
+            // include translation
+            if (inputTriangles[i].translation) vec3.add(center, center, inputTriangles[i].translation);
+            var d = vec3.squaredDistance(Eye, center);
+            return {idx: i, dist: d};
+        });
+        sortList.sort(function(a,b){ return b.dist - a.dist; }); // back-to-front
 
-    mat4.perspective(pMatrix, 0.5*Math.PI, 1, 0.1, 10);
-    mat4.lookAt(vMatrix, Eye, Center, Up);
-    mat4.multiply(pvMatrix, pMatrix, vMatrix);
+        var sorted = sortList.map(function(x){ return x.idx; });
 
-    for (var whichTriSet = 0; whichTriSet < numTriangleSets; whichTriSet++) {
-        let currSet = inputTriangles[whichTriSet];
-        makeModelTransform(currSet);
-        mat4.multiply(pvmMatrix, pvMatrix, mMatrix);
-
-        gl.uniformMatrix4fv(mMatrixULoc, false, mMatrix);
-        gl.uniformMatrix4fv(pvmMatrixULoc, false, pvmMatrix);
-
-        gl.uniform3fv(ambientULoc, currSet.material.ambient);
-        gl.uniform3fv(diffuseULoc, currSet.material.diffuse);
-        gl.uniform3fv(specularULoc, currSet.material.specular);
-        gl.uniform1f(shininessULoc, currSet.material.n);
-
-        gl.uniform1f(alphaULoc, currSet.alpha !== undefined ? currSet.alpha : 1.0);
-        gl.uniform1i(blendModeULoc, blendMode || 0);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffers[whichTriSet]);
-        gl.vertexAttribPointer(vPosAttribLoc, 3, gl.FLOAT, false, 0, 0);
-        gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffers[whichTriSet]);
-        gl.vertexAttribPointer(vNormAttribLoc, 3, gl.FLOAT, false, 0, 0);
-        gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffers[whichTriSet]);
-        gl.vertexAttribPointer(vUVAttribLoc, 2, gl.FLOAT, false, 0, 0);
-
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, triangleBuffers[whichTriSet]);
-        gl.drawElements(gl.TRIANGLES, 3 * triSetSizes[whichTriSet], gl.UNSIGNED_SHORT, 0);
+        // disable depth writes so transparent fragments don't prevent underlying draws
+        gl.depthMask(false);
+        drawSets(sorted, pvMatrix);
+        // restore depth write
+        gl.depthMask(true);
     }
-}
+} // end renderModels
 
 // helper: draw array of triangle set indices using current shader and state
 function drawSets(setIndexArray, pvMatrix) {
@@ -704,39 +763,6 @@ function drawSets(setIndexArray, pvMatrix) {
     }
 } // end drawSets
 
-function togglePart5() {
-  part5Mode = !part5Mode;
-
-  for (let set of inputTriangles) {
-    if (part5Mode) {
-      // Neon Ghost Mode
-      // Make triangles glow with partial transparency
-      set.originalMaterial = set.originalMaterial || {
-        ambient: set.material.ambient.slice(),
-        diffuse: set.material.diffuse.slice(),
-        specular: set.material.specular.slice(),
-        n: set.material.n
-      };
-
-      set.material.ambient = [0.1, 0.8, 1.0]; // cyan neon
-      set.material.diffuse = [0.1, 0.8, 1.0]; // neon glow
-      set.material.specular = [1.0, 1.0, 1.0]; // highlight
-      set.material.n = 50; // shininess
-      set.alpha = 0.5; // partial transparency
-    } else {
-      // Restore original materials
-      if (set.originalMaterial) {
-        set.material.ambient = set.originalMaterial.ambient.slice();
-        set.material.diffuse = set.originalMaterial.diffuse.slice();
-        set.material.specular = set.originalMaterial.specular.slice();
-        set.material.n = set.originalMaterial.n;
-        set.alpha = 1.0; // opaque
-      }
-    }
-  }
-}
-
-
 // setup key handling for blend toggle
 function setupKeys() {
   window.addEventListener("keydown", function (e) {
@@ -746,11 +772,6 @@ function setupKeys() {
       if (blendModeULoc) gl.uniform1i(blendModeULoc, blendMode);
       console.log("Blend mode toggled. Now: " + (blendMode === 0 ? "REPLACE (texture only)" : "MODULATE (lighting * texture)"));
     }
-
-    if (e.key === "!") {
-      togglePart5();
-    }
-
   });
 }
 
