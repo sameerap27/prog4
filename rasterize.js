@@ -773,30 +773,89 @@ function setupKeys() {
     }
 
     if (e.key === "!") {
-        console.log("Part 5: making scene interesting!");
 
+        // Create a cyberpunk/neon aesthetic with animated properties
         for (var i = 0; i < numTriangleSets; i++) {
             var currSet = inputTriangles[i];
 
             if (!currSet.material) currSet.material = {};
-            currSet.material.diffuse = [
-                Math.random() * 0.8 + 0.2, // R: 0.2–1.0
-                Math.random() * 0.8 + 0.2, // G
-                Math.random() * 0.8 + 0.2  // B
-            ];
+            
+            // Assign vibrant neon color palettes to different objects
+            var colorScheme = i % 5;
+            switch(colorScheme) {
+                case 0: // Electric Blue
+                    currSet.material.ambient = [0.1, 0.1, 0.3];
+                    currSet.material.diffuse = [0.2, 0.4, 1.0];
+                    currSet.material.specular = [0.8, 0.9, 1.0];
+                    currSet.material.n = 50;
+                    break;
+                case 1: // Hot Pink/Magenta
+                    currSet.material.ambient = [0.3, 0.05, 0.2];
+                    currSet.material.diffuse = [1.0, 0.1, 0.8];
+                    currSet.material.specular = [1.0, 0.6, 1.0];
+                    currSet.material.n = 60;
+                    break;
+                case 2: // Acid Green
+                    currSet.material.ambient = [0.1, 0.3, 0.1];
+                    currSet.material.diffuse = [0.3, 1.0, 0.3];
+                    currSet.material.specular = [0.7, 1.0, 0.7];
+                    currSet.material.n = 40;
+                    break;
+                case 3: // Orange/Yellow
+                    currSet.material.ambient = [0.3, 0.2, 0.05];
+                    currSet.material.diffuse = [1.0, 0.7, 0.1];
+                    currSet.material.specular = [1.0, 0.9, 0.5];
+                    currSet.material.n = 45;
+                    break;
+                case 4: // Purple/Violet
+                    currSet.material.ambient = [0.2, 0.05, 0.3];
+                    currSet.material.diffuse = [0.7, 0.2, 1.0];
+                    currSet.material.specular = [0.9, 0.7, 1.0];
+                    currSet.material.n = 55;
+                    break;
+            }
 
-            var axis = vec3.fromValues(Math.random(), Math.random(), Math.random());
+            // Apply dramatic rotations for a chaotic, energetic feel
+            var axis = vec3.fromValues(
+                Math.sin(i * 0.7) * 0.5 + 0.5,
+                Math.cos(i * 1.3) * 0.5 + 0.5,
+                Math.sin(i * 0.9) * 0.5 + 0.5
+            );
             vec3.normalize(axis, axis);
-            var angle = Math.random() * Math.PI;
+            var angle = (i * Math.PI / 3) + Math.random() * Math.PI * 0.5;
             var rot = mat4.create();
             mat4.fromRotation(rot, angle, axis);
             vec3.transformMat4(currSet.xAxis, currSet.xAxis, rot);
             vec3.transformMat4(currSet.yAxis, currSet.yAxis, rot);
 
-            currSet.material.alpha = 0.5 + Math.random() * 0.5;
-            transparentMask[i] = true;
+            // Vary transparency - some fully opaque for depth, others translucent
+            if (i % 3 === 0) {
+                currSet.material.alpha = 1.0; // Solid neon objects
+                transparentMask[i] = false;
+            } else if (i % 3 === 1) {
+                currSet.material.alpha = 0.7; // Semi-transparent glow
+                transparentMask[i] = true;
+            } else {
+                currSet.material.alpha = 0.4; // Ethereal ghost objects
+                transparentMask[i] = true;
+            }
+
+            // Add position offset to create a scattered/exploded view
+            var offsetMagnitude = 0.15;
+            var offsetDirection = vec3.fromValues(
+                Math.sin(i * 2.1) * offsetMagnitude,
+                Math.cos(i * 1.7) * offsetMagnitude,
+                Math.sin(i * 2.5) * offsetMagnitude
+            );
+            vec3.add(currSet.translation, currSet.translation, offsetDirection);
         }
+
+        // Change light to create dramatic atmosphere
+        lightAmbient = vec3.fromValues(0.3, 0.2, 0.4); // Purple ambient
+        lightDiffuse = vec3.fromValues(1.2, 1.2, 1.5); // Bright diffuse
+        lightSpecular = vec3.fromValues(1.5, 1.5, 2.0); // Strong specular for shine
     }
+    
   });
 }
 
