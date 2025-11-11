@@ -768,9 +768,34 @@ function setupKeys() {
   window.addEventListener("keydown", function (e) {
     if (e.key === "b" || e.key === "B") {
       blendMode = 1 - blendMode;
-      // we update the uniform every frame; immediate update too:
       if (blendModeULoc) gl.uniform1i(blendModeULoc, blendMode);
       console.log("Blend mode toggled. Now: " + (blendMode === 0 ? "REPLACE (texture only)" : "MODULATE (lighting * texture)"));
+    }
+
+    if (e.key === "!") {
+        console.log("Part 5: making scene interesting!");
+
+        for (var i = 0; i < numTriangleSets; i++) {
+            var currSet = inputTriangles[i];
+
+            if (!currSet.material) currSet.material = {};
+            currSet.material.diffuse = [
+                Math.random() * 0.8 + 0.2, // R: 0.2–1.0
+                Math.random() * 0.8 + 0.2, // G
+                Math.random() * 0.8 + 0.2  // B
+            ];
+
+            var axis = vec3.fromValues(Math.random(), Math.random(), Math.random());
+            vec3.normalize(axis, axis);
+            var angle = Math.random() * Math.PI;
+            var rot = mat4.create();
+            mat4.fromRotation(rot, angle, axis);
+            vec3.transformMat4(currSet.xAxis, currSet.xAxis, rot);
+            vec3.transformMat4(currSet.yAxis, currSet.yAxis, rot);
+
+            currSet.material.alpha = 0.5 + Math.random() * 0.5;
+            transparentMask[i] = true;
+        }
     }
   });
 }
